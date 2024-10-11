@@ -1,0 +1,24 @@
+require('dotenv').config();
+
+const http = require('http');
+const app = require('../app');
+
+const httpServer = http.createServer(app);
+const PORT = process.env.PORT || 3000;
+
+httpServer.on('error', error => {
+    switch (error.code) {
+        case 'EACCES' : 
+            console.error(`Port ${PORT} requires elevated privileges`);
+            break;
+        case 'EADDRINUSE' : 
+            console.error(`Port ${PORT} is already in use`);
+            break;
+        default:
+            console.error('ERROR:', { error })
+    }
+})
+
+httpServer.listen(PORT, () => {
+    console.info('Listening on port ' + PORT)
+})

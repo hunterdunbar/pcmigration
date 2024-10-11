@@ -1,0 +1,82 @@
+doctype html
+html
+	head
+		title Table with Checkboxes
+		style.
+			body {
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				font-family: Arial, sans-serif;
+			}
+			table {
+				border-collapse: collapse;
+				margin: 0 auto;
+				width: 60%;
+				text-align: center;
+			}
+			th, td {
+				border: 1px solid #ddd;
+				padding: 8px;
+			}
+			th {
+				background-color: #f2f2f2;
+			}
+			button {
+				margin-top: 20px;
+				padding: 10px 20px;
+				background-color: #4CAF50;
+				color: white;
+				border: none;
+				cursor: pointer;
+			}
+			button:hover {
+				background-color: #45a049;
+			}
+
+			form {
+				width : 100%;
+			}
+
+			.error-message {
+				color: red;
+				margin-bottom: 10px;
+			}
+
+			.permision-set-box {
+				margin-top: 20px;
+				display: flex;
+				justify-content: center;
+			}
+	body
+		.error-message= errorMessage
+		form(action="/generatePackageXml" method="post" id="packageXmlForm") 
+			table(name="tables" id="tables")
+				thead
+					tr
+						th
+						//- th Schema Name
+						th Table Name
+						th Number Of Columns
+						th Size
+				tbody
+					each val in tables
+						tr
+							td
+								input(type="checkbox"
+									,name= "selectedTables"
+									,value= val.tablename 
+									,checked= (selectedTables && selectedTables.includes(val.tablename) || null)
+								)
+
+							//- td #{val.schemaname}
+							td #{val.tablename}
+							td #{val.number_of_columns}
+							td #{val.table_size}
+			.permision-set-box
+				input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
+				label(for="includePermissonSet") Include Permission Set 
+			//- Centering the button under the table
+		button(type="submit" form="packageXmlForm") Get package.xml

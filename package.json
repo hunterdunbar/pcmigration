@@ -1,0 +1,30 @@
+{
+    "name": "privacy_center_migration_assistant",
+    "version": "1.0.0",
+    "author": "Legostaev Sergey <slegostaev@mycervello.com>",
+    "license": "MIT",
+    "dependencies": {
+        "bcrypt": "^5.1.1",
+        "csv-stringify": "^6.5.0",
+        "dotenv": "^16.4.5",
+        "express": "^4.19.2",
+        "express-session": "^1.18.0",
+        "express-sslify": "^1.2.0",
+        "http-errors": "^2.0.0",
+        "jszip": "^3.10.1",
+        "pg": "^8.11.5",
+        "pg-cursor": "^2.10.5",
+        "pg-query-stream": "^4.6.0",
+        "pug": "^3.0.3",
+        "xml-js": "^1.6.11"
+    },
+    "scripts": {
+        "start": "node bin/www",
+        "watch": "nodemon bin/www"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.1.1",
+        "eslint": "^9.1.1",
+        "globals": "^15.0.0"
+    }
+}

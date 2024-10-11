@@ -1,0 +1,53 @@
+doctype html
+html
+	head
+		title PC Migration Assistance
+		style.
+			body {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				margin: 0;
+				font-family: Arial, sans-serif;
+			}
+			.container {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 10px;
+			}
+			select {
+				padding: 10px;
+				font-size: 16px;
+			}
+			button {
+				padding: 10px 20px;
+				font-size: 16px;
+				cursor: pointer;
+			}
+			.description {
+				font-size: 14px;
+				color: #555;
+				margin-bottom: 10px;
+			}
+			.select-wrapper {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+			}
+			.error-message {
+				color: red;
+				margin-bottom: 10px;
+			}
+	body
+		.container
+			.description Select Table from the list to get Package.xml
+			.error-message= errorMessage
+			.select-wrapper
+				form(action="/generatePackageXml" method="post" id="packageXmlForm") 
+					select(name="tableName")
+						option(value= null) 
+						each val in tables
+							option(value= val, selected= val == selectedTable) #{val}
+				button(type="submit" form="packageXmlForm") Get package.xml
