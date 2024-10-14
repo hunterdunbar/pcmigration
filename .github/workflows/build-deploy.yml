@@ -35,8 +35,8 @@
        - name: Install Dependencies
          run: npm install
  
-       - name: Build Backend Code
-         run: npm run build
+     #  - name: Build Backend Code
+     #   run: npm run build
  
        - run: heroku plugins:install node
  
