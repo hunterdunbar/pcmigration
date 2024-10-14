@@ -1,8 +1,8 @@
 const {
     sourceTable,
-    hcSchema : sourceSchema,
+    pcSchema : sourceSchema,
     targetTable,
-    pcSchema : targetSchema,
+    hcSchema : targetSchema,
     bulkLimit,
     numberOfThreads
 } = require('./config/default');
