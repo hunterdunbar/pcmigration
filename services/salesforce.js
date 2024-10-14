@@ -1,16 +1,16 @@
+const {
+    migratedTablePrefix
+} = require('./../config/default');
 const { convertColumnNameToSFformat } = require('./converters')
 
-const MIGRATED_SF_OBJECT_PREFIX = process.env.MIGRATED_OBJECT_PREFIX || 'pcma';
-
-
 function getSalesforceCustomObjectName(tableName) {
-    return `${MIGRATED_SF_OBJECT_PREFIX}_${tableName}__c`
+    return `${migratedTablePrefix}_${tableName}__c`
 }
 
 function getMetadataJson(tableName, tableMetada) {
     return {
         fullName : getSalesforceCustomObjectName(tableName),
-        label : `${MIGRATED_SF_OBJECT_PREFIX} ${tableName}`,
+        label : `${migratedTablePrefix} ${tableName}`,
         pluralLabel : tableName,
         deploymentStatus: 'Deployed',
         sharingModel: 'ReadWrite',
