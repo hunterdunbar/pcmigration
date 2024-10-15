@@ -19,7 +19,7 @@
       "value": "salesforce"
     },
     "NUMBER_OF_THREADS": {
-      "description": "The Number Of Threads. As A Default Use The Number Of CPU",
+      "description": "The Number Of Threads. Leave It Empty To Use The Default i.e. Number Of CPUs",
       "required": true
     },
     "PC_SCHEMA": {
