@@ -7,7 +7,7 @@
     "APP_USERNAME": "cervello",
     "BULK_LIMIT": {
       "description": "The Limit Of Records For One Job",
-      "required": true,
+      "required": false,
       "value": "10000"
     },
     "CLIENT_DATABASE_URL": {
@@ -16,16 +16,16 @@
     },
     "HC_SCHEMA": {
       "description": "The Heroku Connect/target Schema",
-      "required": true,
+      "required": false,
       "value": "salesforce"
     },
     "NUMBER_OF_THREADS": {
       "description": "The Number Of Threads. Leave It Empty To Use The Default i.e. Number Of CPUs",
-      "required": true
+      "required": false
     },
     "PC_SCHEMA": {
       "description": "The Privacy Center/Source Schema",
-      "required": true,
+      "required": false,
       "value": "cache"
     },
     "SESSION_SECRET": {
@@ -34,11 +34,11 @@
     },
     "SOURCE_TABLE": {
       "description": "The Table From Which The Data Will Be Copied",
-      "required": true
+      "required": false
     },
     "TARGET_TABLE": {
       "description": "The Table To Which The Data Will Be Copied",
-      "required": true
+      "required": false
     }
   },
   "formation": {
