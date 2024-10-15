@@ -78,8 +78,8 @@ const cluster = require('cluster');
 
 
         if (queue.length === 0) {
-            processInfoLogging(processInfo)
-            return;
+            processInfoLogging(processInfo);
+            process.exit(0);
         }
 
         
@@ -110,12 +110,7 @@ const cluster = require('cluster');
                         JOB : JSON.stringify(nextJob)
                     });
                 } else {
-                    const jobsWithError = queue.filter(j => j.status === JOB_STATUS.Error);
-                    const completedJobs = queue.filter(j => j.status === JOB_STATUS.Completed);
-                    
-                    console.debug('All jobs has been processed: ')
-                    console.debug('Jobs with Error: ' + jobsWithError.length);
-                    console.debug('Complted Jobs: ' + completedJobs.length);
+                    process.exit(0);
                 }
             }
         });
