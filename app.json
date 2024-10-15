@@ -4,22 +4,35 @@
   "env": {
     "APP_PASS": "$2b$10$U2iEGGYsXq23Zr8KfaUQ6e6zNLPpnir3GKxOsgU.OBTLE1sFkWwDu",
     "APP_USERNAME": "cervello",
-    "BULK_LIMIT": "10000",
-    "CLIENT_DATABASE_URL": {
-      "generator": "secret"
+    "BULK_LIMIT": {
+      "description": "The limit of records for one job",
+      "required": true,
+      "value": "10000"
     },
-    "HC_SCHEMA": "salesforce",
+    "CLIENT_DATABASE_URL": {
+      "description": "The url for client db",
+      "required": true
+    },
+    "HC_SCHEMA": {
+      "description": "The url for client db",
+      "required": true,
+      "value": "salesforce"
+    },
     "NUMBER_OF_THREADS": {
+      "description": "For default use the number of cpu",
       "required": true
     },
     "PC_SCHEMA": "cache",
     "SESSION_SECRET": {
+      "description": "Unique String",
       "generator": "secret"
     },
     "SOURCE_TABLE": {
+      "description": "Table from which the data will be copied",
       "required": true
     },
     "TARGET_TABLE": {
+      "description": "Table to which the data will be copied",
       "required": true
     }
   },
