@@ -1,5 +1,6 @@
 {
   "name": "pc-migration-assistant",
+  "description": "Salesforce Privacy Center Migration Assistant",
   "scripts": {},
   "env": {
     "APP_PASS": "$2b$10$U2iEGGYsXq23Zr8KfaUQ6e6zNLPpnir3GKxOsgU.OBTLE1sFkWwDu",
@@ -45,13 +46,11 @@
       "quantity": 1
     }
   },
-  "addons": [
-    "papertrail"
-  ],
+  "addons": [],
   "buildpacks": [
     {
       "url": "heroku/nodejs"
     }
   ],
-  "stack": "heroku-22"
+  "stack": "heroku-24"
 }
