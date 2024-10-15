@@ -1,0 +1,40 @@
+{
+  "name": "pc-migration-assistant",
+  "scripts": {},
+  "env": {
+    "APP_PASS": "$2b$10$U2iEGGYsXq23Zr8KfaUQ6e6zNLPpnir3GKxOsgU.OBTLE1sFkWwDu",
+    "APP_USERNAME": "cervello",
+    "BULK_LIMIT": "10000",
+    "CLIENT_DATABASE_URL": {
+      "generator": "secret"
+    },
+    "HC_SCHEMA": "salesforce",
+    "NUMBER_OF_THREADS": {
+      "required": true
+    },
+    "PC_SCHEMA": "cache",
+    "SESSION_SECRET": {
+      "generator": "secret"
+    },
+    "SOURCE_TABLE": {
+      "required": true
+    },
+    "TARGET_TABLE": {
+      "required": true
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1
+    }
+  },
+  "addons": [
+    "papertrail"
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "stack": "heroku-22"
+}
