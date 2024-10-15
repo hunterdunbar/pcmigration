@@ -5,34 +5,38 @@
     "APP_PASS": "$2b$10$U2iEGGYsXq23Zr8KfaUQ6e6zNLPpnir3GKxOsgU.OBTLE1sFkWwDu",
     "APP_USERNAME": "cervello",
     "BULK_LIMIT": {
-      "description": "The limit of records for one job",
+      "description": "The Limit Of Records For One Job",
       "required": true,
       "value": "10000"
     },
     "CLIENT_DATABASE_URL": {
-      "description": "The url for client db",
+      "description": "The URL For Client Database",
       "required": true
     },
     "HC_SCHEMA": {
-      "description": "The url for client db",
+      "description": "The Heroku Connect/target Schema",
       "required": true,
       "value": "salesforce"
     },
     "NUMBER_OF_THREADS": {
-      "description": "For default use the number of cpu",
+      "description": "The Number Of Threads. As A Default Use The Number Of CPU",
       "required": true
     },
-    "PC_SCHEMA": "cache",
+    "PC_SCHEMA": {
+      "description": "The Privacy Center/Source Schema",
+      "required": true,
+      "value": "cache"
+    },
     "SESSION_SECRET": {
-      "description": "Unique String",
+      "description": "A Unique String",
       "generator": "secret"
     },
     "SOURCE_TABLE": {
-      "description": "Table from which the data will be copied",
+      "description": "The Table From Which The Data Will Be Copied",
       "required": true
     },
     "TARGET_TABLE": {
-      "description": "Table to which the data will be copied",
+      "description": "The Table To Which The Data Will Be Copied",
       "required": true
     }
   },
