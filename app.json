@@ -3,34 +3,25 @@
   "description": "Salesforce Privacy Center Migration Assistant",
   "scripts": {},
   "env": {
-    "APP_PASS": "$2b$10$U2iEGGYsXq23Zr8KfaUQ6e6zNLPpnir3GKxOsgU.OBTLE1sFkWwDu",
-    "APP_USERNAME": "cervello",
-    "BULK_LIMIT": {
-      "description": "The Limit Of Records For One Job",
-      "required": false,
-      "value": "10000"
+    "SESSION_SECRET": {
+      "description": "A Unique String",
+      "generator": "secret"
     },
     "CLIENT_DATABASE_URL": {
       "description": "The URL For Client Database",
       "required": true
     },
+    "APP_PASS": "$2b$10$U2iEGGYsXq23Zr8KfaUQ6e6zNLPpnir3GKxOsgU.OBTLE1sFkWwDu",
+    "APP_USERNAME": "cervello",
     "HC_SCHEMA": {
-      "description": "The Heroku Connect/target Schema",
+      "description": "The Heroku Connect (target) Schema",
       "required": false,
       "value": "salesforce"
     },
-    "NUMBER_OF_THREADS": {
-      "description": "The Number Of Threads. Leave It Empty To Use The Default i.e. Number Of CPUs",
-      "required": false
-    },
     "PC_SCHEMA": {
-      "description": "The Privacy Center/Source Schema",
+      "description": "The Privacy Center (source) Schema",
       "required": false,
       "value": "cache"
-    },
-    "SESSION_SECRET": {
-      "description": "A Unique String",
-      "generator": "secret"
     },
     "SOURCE_TABLE": {
       "description": "The Table From Which The Data Will Be Copied",
@@ -38,6 +29,15 @@
     },
     "TARGET_TABLE": {
       "description": "The Table To Which The Data Will Be Copied",
+      "required": false
+    },
+    "BULK_LIMIT": {
+      "description": "The Limit Of Records For One Job",
+      "required": false,
+      "value": "10000"
+    },
+    "NUMBER_OF_THREADS": {
+      "description": "The Number Of Threads. Leave It Empty To Use The Default i.e. Number Of CPUs",
       "required": false
     }
   },
