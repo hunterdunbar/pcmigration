@@ -5,30 +5,26 @@ const { validateSession } = require('./../services/security');
 const { getTablesInSchemas, getTableMetadata } = require('./../services/db');
 const { getMetadataJson, getPermissionSetJson, getPermissionSetName } = require('./../services/salesforce');
 
-const {
-    pcSchema
-} = require('./../config/default')
-
 const xmlConverter = require('xml-js');
 const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
 
 const JSZip = require('jszip');
 
-
+const defaultSchema = process.env.PC_SCHEMA || null;
 
 async function renderPage(resp, selectedTables = null, errorMessage = null) {
 
-    if (!pcSchema) {
-        errorMessage = 'Privacy Shema schema is not defined';
+    if (!defaultSchema) {
+        errorMessage = 'Default schema is not defined';
     }
 
     let data = null;
-    if (pcSchema) {
-        data = await getTablesInSchemas([ pcSchema ]).catch(e => errorMessage = e.message);
+    if (defaultSchema) {
+        data = await getTablesInSchemas([ defaultSchema ]).catch(e => errorMessage = e.message);
     }
 
     resp.render('packageExport', { 
-        tables : data?.[pcSchema] || [], 
+        tables : data?.[defaultSchema] || [], 
         selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
         errorMessage 
     });
@@ -53,7 +49,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
         const metadata = await Promise.all(
             (Array.isArray(selectedTables) ? selectedTables : [ selectedTables ])
                 .map(async tableName => 
-                    await getTableMetadata(pcSchema + '.' + tableName)
+                    await getTableMetadata(defaultSchema + '.' + tableName)
                         .then(tableMetada => getMetadataJson(tableName, tableMetada))
                 )
         ).catch(e => {
@@ -62,7 +58,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
         })
 
         if (!metadata?.length) {
-            return renderPage(resp, selectedTables, 'Table Info not found in schema ' + pcSchema)
+            return renderPage(resp, selectedTables, 'Table Info not found in schema ' + defaultSchema)
         }
 
         
