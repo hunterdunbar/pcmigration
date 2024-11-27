@@ -5,21 +5,17 @@ const { validateSession } = require('./../services/security');
 const { getTablesInSchemas, getTableMetadata } = require('./../services/db');
 const { getMetadataJson, getPermissionSetJson, getPermissionSetName } = require('./../services/salesforce');
 
-const {
-    pcSchema
-} = require('./../config/default')
-
 const xmlConverter = require('xml-js');
 const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
 
 const JSZip = require('jszip');
 
-
+const pcSchema = process.env.PC_SCHEMA || null;
 
 async function renderPage(resp, selectedTables = null, errorMessage = null) {
 
     if (!pcSchema) {
-        errorMessage = 'Privacy Shema schema is not defined';
+        errorMessage = 'Privacy Center (PC) schema is not defined';
     }
 
     let data = null;

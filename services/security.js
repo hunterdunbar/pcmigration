@@ -1,13 +1,12 @@
 const bcrypt = require('bcrypt');
 
-const {
-    appUsername,
-    appPassword
-} = require('./../config/default');
+const APP_PASSWORD = process.env.APP_PASS || null;
+const APP_USERNAME = process.env.APP_USERNAME || null;
+
 
 
 function login(username = null, password = null) {
-    if (!(appUsername || appPassword)) {
+    if (!(APP_USERNAME || APP_PASSWORD)) {
         throw new Error('Username or password is not defined')
     }
 
@@ -15,8 +14,8 @@ function login(username = null, password = null) {
         throw new Error('Username or password is empty')
     }
 
-    if (username.toLowerCase() === appUsername?.toLowerCase() 
-        && bcrypt.compareSync(password, appPassword)) {
+    if (username.toLowerCase() === APP_USERNAME.toLowerCase() 
+        && bcrypt.compareSync(password, APP_PASSWORD)) {
         return true;
     }
 
