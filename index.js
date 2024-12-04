@@ -55,7 +55,7 @@ const cluster = require('cluster');
         const targetColumns = tableMetada?.rows.map(r => convertColumnNameToSFformat(r.columnName)).join(',')
 
         //get count of objects
-        const countOfRowsRes = await query(`select count(*) from ${sourceTable}`);
+        const countOfRowsRes = await query(`select count(*) from ${pcSchema}.${sourceTable}`);
         const countOfRows = countOfRowsRes?.rows?.[0]?.count;
 
         const countOfJobs =  Math.ceil((1*countOfRows)/(1 * bulkLimit));
