@@ -3,8 +3,6 @@ const bcrypt = require('bcrypt');
 const APP_PASSWORD = process.env.APP_PASS || null;
 const APP_USERNAME = process.env.APP_USERNAME || null;
 
-
-
 function login(username = null, password = null) {
     if (!(APP_USERNAME || APP_PASSWORD)) {
         throw new Error('Username or password is not defined')

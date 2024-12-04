@@ -7,22 +7,26 @@ const  {
 
 const { JOB_STATUS } = require('./services/utils');
 
+
+
 const { convertColumnNameToSFformat, getExternalIdFieldName } = require('./services/salesforce')
 const { processInfoLogging } = require('./services/processInfo');
 
+const { 
+    sourceTable,
+    targetTable,
+    hcSchema,
+    pcSchema,
+    clientDbUrl,
+    numberOfThreads,
+    bulkLimit
+} = require('./config/default')
 
 const cluster = require('cluster');
-const os = require('os');
-
-const sourceTable = process.env.SOURCE_TABLE;
-const hcSchema = process.env.HC_SCHEMA || 'salesforce';
-const targetTable = process.env.TARGET_TABLE;
-const limit = process.env.BULK_LIMIT || 10000;
-const numCPUs = process.env.NUMBER_OF_THREADS || os.cpus().length; 
 
 (async () => {
 
-    if (!process.env.CLIENT_DATABASE_URL) {
+    if (!clientDbUrl) {
         throw new Error('CLIENT_DATABASE_URL is not defined')
     }
 
@@ -41,7 +45,7 @@ const numCPUs = process.env.NUMBER_OF_THREADS || os.cpus().length;
 
     if (cluster.isMaster) {
         //need to get list of fields from source table
-        const tableMetada = await getTableMetadata(sourceTable);
+        const tableMetada = await getTableMetadata(`${pcSchema}.${sourceTable}`);
 
         //get count of objects
         const countOfRowsInTargetTableRes = await query(`select count(*) from ${hcSchema}.${targetTable}`);
@@ -54,12 +58,12 @@ const numCPUs = process.env.NUMBER_OF_THREADS || os.cpus().length;
         const countOfRowsRes = await query(`select count(*) from ${sourceTable}`);
         const countOfRows = countOfRowsRes?.rows?.[0]?.count;
 
-        const countOfJobs =  Math.ceil((1*countOfRows)/(1 * limit));
+        const countOfJobs =  Math.ceil((1*countOfRows)/(1 * bulkLimit));
         const queue = [];
 
         //create list of queries
         for (let i = 0; i < countOfJobs; i++) {
-            const offset = (i * limit);
+            const offset = (i * bulkLimit);
             queue.push({
                 index : i,
                 status : null,
@@ -70,9 +74,9 @@ const numCPUs = process.env.NUMBER_OF_THREADS || os.cpus().length;
             })
         }
 
-        processInfo.limitPerJob = limit;
+        processInfo.limitPerJob = bulkLimit;
         processInfo.countOfRecordsToMigrate = countOfRows;
-        processInfo.countOfThreads = numCPUs;
+        processInfo.countOfThreads = numberOfThreads;
         processInfo.countOfJobs = countOfJobs;
         processInfo.countOfMigratedRecords = countOfRowsInTargetTable;
 
@@ -85,7 +89,7 @@ const numCPUs = process.env.NUMBER_OF_THREADS || os.cpus().length;
         
         console.log(`Master process ${process.pid} is running`);
       
-        for (let i = 0; i < numCPUs; i++) {
+        for (let i = 0; i < numberOfThreads; i++) {
             const job = queue.find(j => !j.status);
             job.status = JOB_STATUS.Pending;
 
@@ -147,7 +151,7 @@ const numCPUs = process.env.NUMBER_OF_THREADS || os.cpus().length;
         //     }, 10000)
         // })
         const externalId = getExternalIdFieldName();
-        const queryString = `insert into ${hcSchema}.${targetTable}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${sourceTable} order by id limit ${limit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
+        const queryString = `insert into ${hcSchema}.${targetTable}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${sourceTable} order by id limit ${bulkLimit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
         let critialError = false;
         try {
             await query(queryString);
