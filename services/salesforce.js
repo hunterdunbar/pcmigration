@@ -17,8 +17,15 @@ function convertColumnNameToSFformat(columnName) {
 
     //replace double _ for column name from namespaces
     columnName = columnName.replace(/(.)__([^c].)/gi, '$1_$2');
-    const prefix = `${(columnName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedTablePrefix)}`
-    return prefix + '_' + (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
+    
+    //if prefix will be added then we may have an issue with field name length
+    //so, for now i just don't add prefix to column name
+
+    //const prefix = `${(columnName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedTablePrefix)}`
+    //return prefix + '_' + (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
+
+
+    return (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
 }
 
 
