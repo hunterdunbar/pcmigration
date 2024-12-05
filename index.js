@@ -151,7 +151,7 @@ const cluster = require('cluster');
         //     }, 10000)
         // })
         const externalId = getExternalIdFieldName();
-        const queryString = `insert into ${hcSchema}.${targetTable}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${sourceTable} order by id limit ${bulkLimit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
+        const queryString = `insert into ${hcSchema}.${targetTable}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} order by id limit ${bulkLimit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
         let critialError = false;
         try {
             await query(queryString);
