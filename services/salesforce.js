@@ -3,7 +3,7 @@ const { migratedCustomTablePrefix, migratedTablePrefix } = require('./../config/
 
 
 function getSalesforceCustomObjectName(tableName) {
-    return `${(tableName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedCustomTablePrefix)}_${tableName}__c`
+    return `${(tableName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedTablePrefix)}_${tableName}__c`
 }
 
 function getExternalIdFieldName() {
