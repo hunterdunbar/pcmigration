@@ -3,12 +3,14 @@ const { parse } = require('pg-connection-string');
 const Cursor = require('pg-cursor');
 const { Readable, Writable } = require('stream');
 
+const { clientDbUrl, hcSchema } = require('./../config/default');
 
-if (!process.env.CLIENT_DATABASE_URL) {
+
+if (!clientDbUrl) {
     throw new Error('CLIENT_DATABASE_URL is not defined');
 }
 
-const dbConfig = parse(process.env.CLIENT_DATABASE_URL)
+const dbConfig = parse(clientDbUrl)
 
 const pool = new Pool({
     ...dbConfig,
@@ -136,8 +138,6 @@ class QueryStream extends Readable {
     }
 
 }
-
-const hcSchema = process.env.HC_SCHEMA || 'salesforce'
 
 class HerokuSchemaWriter extends Writable {
     

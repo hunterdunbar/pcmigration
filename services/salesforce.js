@@ -1,15 +1,13 @@
 
-const MIGRATED_SF_STANDARD_OBJECT_PREFIX = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 'migrated';
-const MIGRATED_SF_CUSTOM_OBJECT_PREFIX = process.env.MIGRATED_CUSTOM_OBJECT_PREFIX || 'migrated_custom';
-
+const { migratedCustomTablePrefix, migratedTablePrefix } = require('./../config/default');
 
 
 function getSalesforceCustomObjectName(tableName) {
-    return `${(tableName.indexOf('__c') > 0 ? MIGRATED_SF_CUSTOM_OBJECT_PREFIX : MIGRATED_SF_STANDARD_OBJECT_PREFIX)}_${tableName}__c`
+    return `${(tableName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedTablePrefix)}_${tableName}__c`
 }
 
 function getExternalIdFieldName() {
-    return MIGRATED_SF_STANDARD_OBJECT_PREFIX + '_id__c';
+    return migratedTablePrefix + '_id__c';
 }
 
 function convertColumnNameToSFformat(columnName) {
@@ -19,8 +17,15 @@ function convertColumnNameToSFformat(columnName) {
 
     //replace double _ for column name from namespaces
     columnName = columnName.replace(/(.)__([^c].)/gi, '$1_$2');
-    const prefix = `${(columnName.indexOf('__c') > 0 ? MIGRATED_SF_CUSTOM_OBJECT_PREFIX : MIGRATED_SF_STANDARD_OBJECT_PREFIX)}`
-    return prefix + '_' + (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
+    
+    //if prefix will be added then we may have an issue with field name length
+    //so, for now i just don't add prefix to column name
+
+    //const prefix = `${(columnName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedTablePrefix)}`
+    //return prefix + '_' + (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
+
+
+    return (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
 }
 
 

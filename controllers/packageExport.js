@@ -8,9 +8,9 @@ const { getMetadataJson, getPermissionSetJson, getPermissionSetName } = require(
 const xmlConverter = require('xml-js');
 const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
 
-const JSZip = require('jszip');
+const { pcSchema } = require('../config/default')
 
-const pcSchema = process.env.PC_SCHEMA || null;
+const JSZip = require('jszip');
 
 async function renderPage(resp, selectedTables = null, errorMessage = null) {
 
