@@ -1,5 +1,8 @@
 
-const { migratedCustomTablePrefix, migratedTablePrefix } = require('./../config/default');
+const { 
+    migratedCustomTablePrefix, 
+    migratedTablePrefix 
+} = require('./../config/default');
 
 
 function getSalesforceCustomObjectName(tableName) {
@@ -38,7 +41,7 @@ function getMetadataJson(tableName, tableMetada) {
     return {
         fullName : objectName,
         label : objectName,
-        pluralLabel : tableName,
+        pluralLabel : objectName,
         deploymentStatus: 'Deployed',
         sharingModel: 'ReadWrite',
         nameField: {
