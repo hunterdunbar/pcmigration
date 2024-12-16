@@ -1,9 +1,16 @@
 
-const { migratedCustomTablePrefix, migratedTablePrefix } = require('./../config/default');
+const { 
+    migratedCustomTablePrefix, 
+    migratedTablePrefix 
+} = require('./../config/default');
 
 
 function getSalesforceCustomObjectName(tableName) {
-    return `${(tableName.indexOf('__c') > 0 ? migratedCustomTablePrefix : migratedTablePrefix)}_${tableName}__c`
+    tableName = tableName.replace(/(.)__([^c].)/gi, '$1_$2');
+    if (tableName.endsWith('__c')) {
+        return `${migratedCustomTablePrefix}_${tableName}`;
+    }
+    return `${migratedTablePrefix}_${tableName}__c`;
 }
 
 function getExternalIdFieldName() {
@@ -34,7 +41,7 @@ function getMetadataJson(tableName, tableMetada) {
     return {
         fullName : objectName,
         label : objectName,
-        pluralLabel : tableName,
+        pluralLabel : objectName,
         deploymentStatus: 'Deployed',
         sharingModel: 'ReadWrite',
         nameField: {

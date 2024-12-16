@@ -91,11 +91,16 @@ const cluster = require('cluster');
       
         for (let i = 0; i < numberOfThreads; i++) {
             const job = queue.find(j => !j.status);
-            job.status = JOB_STATUS.Pending;
+            if (!job) {
+                job.status = JOB_STATUS.Pending;
 
-            cluster.fork({
-                JOB : JSON.stringify(job)
-            });
+                cluster.fork({
+                    JOB : JSON.stringify(job)
+                });
+            } else {
+                console.log('No jobs in queue');
+                break;
+            }
         }
 
         cluster.on('message', (worker, message) => {
