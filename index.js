@@ -91,7 +91,7 @@ const cluster = require('cluster');
       
         for (let i = 0; i < numberOfThreads; i++) {
             const job = queue.find(j => !j.status);
-            if (!job) {
+            if (job) {
                 job.status = JOB_STATUS.Pending;
 
                 cluster.fork({
