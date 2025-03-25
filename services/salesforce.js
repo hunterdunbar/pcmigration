@@ -14,7 +14,7 @@ function getSalesforceCustomObjectName(tableName) {
 }
 
 function getExternalIdFieldName() {
-    return migratedTablePrefix + '_id__c';
+    return 'id__c';
 }
 
 function convertColumnNameToSFformat(columnName) {
