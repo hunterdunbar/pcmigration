@@ -13,5 +13,5 @@ module.exports = {
     appUsername : process.env.APP_USERNAME || null,
     migratedTablePrefix : process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 'migrated',
     migratedCustomTablePrefix : process.env.MIGRATED_CUSTOM_OBJECT_PREFIX || 'migrated_custom',
-    useLongTextLength : process.env.USE_LONG_TEXT_LENGTH || false,
+    useLongTextAreaFieldType : process.env.USE_LONG_TEXT_AREA_FIELD_TYPE === 'true' || false,
 }
