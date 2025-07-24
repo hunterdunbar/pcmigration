@@ -3,7 +3,7 @@ const { parse } = require('pg-connection-string');
 const Cursor = require('pg-cursor');
 const { Readable, Writable } = require('stream');
 
-const { clientDbUrl, hcSchema } = require('./../config/default');
+const { clientDbUrl, hcSchema, useLongTextAreaFieldType } = require('./../config/default');
 
 
 if (!clientDbUrl) {
@@ -210,21 +210,24 @@ async function getColumns(schemaName, tableName) {
         }
     })
 
-    //some of text columns don't have length, to create salesforce object we have to know max size of these
-    const columnsWithoutLength = columns.filter(col => (col.dataType === 'varchar' || col.dataType === 'text') 
-        && !col.length && !col.columnName.startsWith('_')).map(col => `max(LENGTH(${col.columnName})) as ${col.columnName}`);
-    
-    
-    if (columnsWithoutLength?.length) {
-        const queryToGetMaxLength = `select ${columnsWithoutLength.join(',')} from ${schemaName}.${tableName}`;
-        console.debug('QUERY for Max Lenth: ' + queryToGetMaxLength);
-        const result = await query(queryToGetMaxLength);
-        if (result.rows?.length) {
-            columns.forEach(col => {
-                if (result.rows[0][col.columnName]) {
-                    col.length = result.rows[0][col.columnName]
-                }
-            })
+    if (!useLongTextAreaFieldType) {
+
+        //some of text columns don't have length, to create salesforce object we have to know max size of these
+        const columnsWithoutLength = columns.filter(col => (col.dataType === 'varchar' || col.dataType === 'text') 
+            && !col.length && !col.columnName.startsWith('_')).map(col => `max(LENGTH(${col.columnName})) as ${col.columnName}`);
+        
+        
+        if (columnsWithoutLength?.length) {
+            const queryToGetMaxLength = `select ${columnsWithoutLength.join(',')} from ${schemaName}.${tableName}`;
+            console.debug('QUERY for Max Lenth: ' + queryToGetMaxLength);
+            const result = await query(queryToGetMaxLength);
+            if (result.rows?.length) {
+                columns.forEach(col => {
+                    if (result.rows[0][col.columnName]) {
+                        col.length = result.rows[0][col.columnName]
+                    }
+                })
+            }
         }
     }
 
