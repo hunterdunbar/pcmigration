@@ -40,20 +40,22 @@ function convertColumnNameToSFformat(columnName) {
 
 const LONG_TEXT_LENGTH = 131072;
 const TEXT_LENGTH = 255;
+const TEXT_TYPE = 'Text';
+const LONG_TEXT_TYPE = 'LongTextArea';
 
-function getFieldLength(column) {
+function getFieldMetadata(column) {
 
     const { columnName, dataType, length} = column;
 
     if (columnName === 'sfid') {
-        return 18
+        return { length : 18, type : TEXT_TYPE }
     }
 
     if (dataType === 'text' || (dataType === 'varchar' && (useLongTextAreaFieldType || length >= 255))) {
-        return LONG_TEXT_LENGTH;
+        return { length : LONG_TEXT_LENGTH, type : LONG_TEXT_TYPE };
     }
 
-    return TEXT_LENGTH;
+    return { length : TEXT_LENGTH, type : TEXT_TYPE };
 }
 
 async function getMetadataJson(schemaName, tableName) {
@@ -70,11 +72,12 @@ async function getMetadataJson(schemaName, tableName) {
             label: 'Auto Number'
         },
         fields : columns.map(column => {
+            const { type, length } = getFieldMetadata(column);
             const sfField = {
                 fullName : convertColumnNameToSFformat(column.columnName),
                 label : column.columnName,
-                type : (column.dataType === 'text' || useLongTextAreaFieldType) ? 'LongTextArea' : 'Text',
-                length : getFieldLength(column),
+                type,
+                length,
                 externalId : column.columnName === 'sfid',
                 unique : column.columnName === 'sfid',
             };
