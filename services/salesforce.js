@@ -1,8 +1,11 @@
 
 const { 
     migratedCustomTablePrefix, 
-    migratedTablePrefix 
+    migratedTablePrefix,
+    useLongTextAreaFieldType
 } = require('./../config/default');
+
+const { getColumns } = require('./db');
 
 
 function getSalesforceCustomObjectName(tableName) {
@@ -35,8 +38,26 @@ function convertColumnNameToSFformat(columnName) {
     return (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
 }
 
+const LONG_TEXT_LENGTH = 131072;
+const TEXT_LENGTH = 255;
 
-function getMetadataJson(tableName, tableMetada) {
+function getFieldLength(column) {
+
+    const { columnName, dataType, length} = column;
+
+    if (columnName === 'sfid') {
+        return 18
+    }
+
+    if (dataType === 'text' || (dataType === 'varchar' && (useLongTextAreaFieldType || length >= 255))) {
+        return LONG_TEXT_LENGTH;
+    }
+
+    return TEXT_LENGTH;
+}
+
+async function getMetadataJson(schemaName, tableName) {
+    const columns = await getColumns(schemaName, tableName);
     const objectName = getSalesforceCustomObjectName(tableName)
     return {
         fullName : objectName,
@@ -48,14 +69,14 @@ function getMetadataJson(tableName, tableMetada) {
             type: 'AutoNumber',
             label: 'Auto Number'
         },
-        fields : tableMetada?.rows?.map(row => {
+        fields : columns.map(column => {
             const sfField = {
-                fullName : convertColumnNameToSFformat(row.columnName),
-                label : row.columnName,
-                type : row.length > 255 ? 'LongTextArea' : 'Text',
-                length : row.length || 255,
-                externalId : row.columnName === 'sfid',
-                unique : row.columnName === 'sfid',
+                fullName : convertColumnNameToSFformat(column.columnName),
+                label : column.columnName,
+                type : (column.dataType === 'text' || useLongTextAreaFieldType) ? 'LongTextArea' : 'Text',
+                length : getFieldLength(column),
+                externalId : column.columnName === 'sfid',
+                unique : column.columnName === 'sfid',
             };
 
             if (sfField.type === 'LongTextArea') {

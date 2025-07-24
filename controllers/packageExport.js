@@ -48,10 +48,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
     } else {
         const metadata = await Promise.all(
             (Array.isArray(selectedTables) ? selectedTables : [ selectedTables ])
-                .map(async tableName => 
-                    await getTableMetadata(pcSchema + '.' + tableName)
-                        .then(tableMetada => getMetadataJson(tableName, tableMetada))
-                )
+                .map(tableName => getMetadataJson(pcSchema, tableName))
         ).catch(e => {
             console.error(e);
             return renderPage(resp, selectedTables, 'Something goes wrong, check log file');

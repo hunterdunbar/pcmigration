@@ -57,9 +57,9 @@ async function getTablesInSchemas(schemas = []) {
     }, {});
 }
 
-function getTableMetadata(tableNameWithSchema) {
+function getTableMetadata(schemaName, tableName) {
     return query(`select column_name "columnName", udt_name "dataType", character_maximum_length length \
-        from information_schema.columns where column_name != 'id' and not(starts_with(column_name, '__')) and table_schema = $1 and table_name = $2`, tableNameWithSchema.split('.'));
+        from information_schema.columns where column_name != 'id' and not(starts_with(column_name, '__')) and table_schema = $1 and table_name = $2`, [schemaName, tableName]);
 }
 
 async function getTablesInfo(tableNamesWithSchema = []) {
@@ -68,12 +68,13 @@ async function getTablesInfo(tableNamesWithSchema = []) {
     }
 
     const result = await Promise.all(
-        tableNamesWithSchema.map(async tableName => {
-            const tableMetada = await getTableMetadata(tableName);
-            const countOfRows = await query(`select count(*) from ${tableName}`);
-            const tableSize = await query(`SELECT pg_total_relation_size('${tableName}') table_size`);
+        tableNamesWithSchema.map(async tableNameWithSchema => {
+            const [schemaName, tableName ] = tableNameWithSchema.split('.');
+            const tableMetada = await getTableMetadata(schemaName, tableName);
+            const countOfRows = await query(`select count(*) from ${tableNameWithSchema}`);
+            const tableSize = await query(`SELECT pg_total_relation_size('${tableNameWithSchema}') table_size`);
             return { 
-                [tableName] : { 
+                [tableNameWithSchema] : { 
                     countOfRows : countOfRows?.rows?.[0]?.count, 
                     tableSize : tableSize?.rows?.[0]?.table_size,
                     tableMetada : tableMetada?.rows
@@ -196,6 +197,40 @@ async function isTableExisting(tableName, schemaName = 'public') {
     return result?.rows?.[0]?.exists || false;
 }
 
+async function getColumns(schemaName, tableName) {
+    const tableMetada = await getTableMetadata(schemaName, tableName);
+    if (!tableMetada) { throw new Error('There is an issue to get information about the table: ' + tableName + ' in schema: ' + schemaName) }
+    
+    
+    const columns = tableMetada.rows?.map(column => {
+        return {
+            columnName : column.columnName,
+            dataType : column.dataType,
+            length : column.length
+        }
+    })
+
+    //some of text columns don't have length, to create salesforce object we have to know max size of these
+    const columnsWithoutLength = columns.filter(col => (col.dataType === 'varchar' || col.dataType === 'text') 
+        && !col.length && !col.columnName.startsWith('_')).map(col => `max(LENGTH(${col.columnName})) as ${col.columnName}`);
+    
+    
+    if (columnsWithoutLength?.length) {
+        const queryToGetMaxLength = `select ${columnsWithoutLength.join(',')} from ${schemaName}.${tableName}`;
+        console.debug('QUERY for Max Lenth: ' + queryToGetMaxLength);
+        const result = await query(queryToGetMaxLength);
+        if (result.rows?.length) {
+            columns.forEach(col => {
+                if (result.rows[0][col.columnName]) {
+                    col.length = result.rows[0][col.columnName]
+                }
+            })
+        }
+    }
+
+    return columns;
+}
+
 
 module.exports = {
     getSchemas,
@@ -206,5 +241,6 @@ module.exports = {
     queryStream,
     hcWriterStream,
     query,
-    isTableExisting
+    isTableExisting,
+    getColumns
 }

@@ -45,7 +45,7 @@ const cluster = require('cluster');
 
     if (cluster.isMaster) {
         //need to get list of fields from source table
-        const tableMetada = await getTableMetadata(`${pcSchema}.${sourceTable}`);
+        const tableMetada = await getTableMetadata(pcSchema, sourceTable);
 
         //get count of objects
         const countOfRowsInTargetTableRes = await query(`select count(*) from ${hcSchema}.${targetTable}`);
