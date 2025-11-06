@@ -9,6 +9,8 @@ const { hash20base64 } = require('./../services/utils');
 
 const { getColumns } = require('./db');
 
+const version = 1;
+
 function replaceDoubleUnderscore(name) {
     return name.replace(/(.)__(.)/gi, '$1_$2').replace(/_c$/i, '__c');
 }
@@ -76,7 +78,7 @@ async function getMetadataJson(schemaName, tableName) {
 
     return {
         fullName : objectName,
-        description : tableName,
+        description : makeDescriptionJson(version, tableName),
         label : tableName.slice(0, 40), //max label length is 40
         pluralLabel : tableName.slice(0, 40), //max label length is 40
         deploymentStatus: 'Deployed',
@@ -90,7 +92,7 @@ async function getMetadataJson(schemaName, tableName) {
             const isSfId = column.columnName === 'sfid';
             const sfField = {
                 fullName : getMappedFieldName(column.columnName, i),
-                description : column.columnName,
+                description : makeDescriptionJson(version, column.columnName),
                 label : column.columnName.slice(0, 40), //max label length is 40
                 type,
                 externalId : isSfId,
@@ -147,6 +149,13 @@ function getMappedFieldName(name, index) {
         return getExternalIdFieldName(); //keep sfid as is for external id field
     }
     return `${MAPPED_FIELD_NAME}_${index}__c`; //mapped field names to avoid issues with length or duplicates
+}
+
+function makeDescriptionJson(version, apiName) {
+    return JSON.stringify({
+        version,
+        apiName
+    });
 }
 
 module.exports = {
