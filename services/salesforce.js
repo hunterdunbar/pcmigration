@@ -62,10 +62,10 @@ function getFieldMetadata(column) {
     }
 
     if (dataType === 'text' || (dataType === 'varchar' && (useLongTextAreaFieldType || length > 255))) {
-        return { length, type : LONG_TEXT_TYPE };
+        return { length : length || 256, type : LONG_TEXT_TYPE };
     }
 
-    return { length : length ? length : 10, type : TEXT_TYPE };
+    return { length : length || 1, type : TEXT_TYPE };
 }
 
 
