@@ -68,6 +68,9 @@ function getFieldMetadata(column) {
     return { length : length ? length : 10, type : TEXT_TYPE };
 }
 
+
+const SALESFORCE_LONG_TEXTAREA_MAX_LENGTH =  1638000;
+
 async function getMetadataJson(schemaName, tableName) {
 
     //get columns for table with information about max column length, it may take time for large tables
@@ -76,7 +79,7 @@ async function getMetadataJson(schemaName, tableName) {
     //convert sf object name to new object name to prevent issues with length and duplicates
     const objectName = getSalesforceCustomObjectName(tableName);
 
-    return {
+    const result = {
         fullName : objectName,
         description : makeDescriptionJson(version, tableName),
         label : tableName.slice(0, 40), //max label length is 40
@@ -114,6 +117,18 @@ async function getMetadataJson(schemaName, tableName) {
             return sfField;
         })
     }
+
+    //Salesforce has limit of 1,638,000 chars for all text fields in one object
+    let totalLengthOfTextFields = 0;
+    result.fields.filter(f => f.type === LONG_TEXT_TYPE).forEach(f => {
+        totalLengthOfTextFields += (f.length || 0);
+    })
+
+    if (totalLengthOfTextFields >= SALESFORCE_LONG_TEXTAREA_MAX_LENGTH) {
+        throw new Error(`Total length of LongTextArea fields ${totalLengthOfTextFields} for "${tableName}" exceeds maximum allowed ${SALESFORCE_LONG_TEXTAREA_MAX_LENGTH}`);
+    }
+
+    return result;
 }
 
 const PERMISION_SET_NAME_TEMPLATE = 'PCMA Permission Set For';

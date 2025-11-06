@@ -55,57 +55,59 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
     if (!selectedTables?.length) {
         return renderPage(resp, selectedTables, 'Table is not selected')
     } else {
-        const metadata = await Promise.all(
-            (Array.isArray(selectedTables) ? selectedTables : [ selectedTables ])
-                .map(tableName => getMetadataJson(pcSchema, tableName))
-        ).catch(e => {
-            console.error('error:', e);
-            return renderPage(resp, selectedTables, 'Something goes wrong, check log file');
-        })
 
-        if (!metadata?.length) {
-            return renderPage(resp, selectedTables, 'Table Info not found in schema ' + pcSchema)
-        }
+        try {
+            const metadata = await Promise.all(
+                (Array.isArray(selectedTables) ? selectedTables : [ selectedTables ])
+                    .map(tableName => getMetadataJson(pcSchema, tableName))
+            )
 
+            if (!metadata?.length) {
+                return renderPage(resp, selectedTables, 'Table Info not found in schema ' + pcSchema)
+            }
 
-        const zip = new JSZip();
+            const zip = new JSZip();
         
-        const objectsFolder = zip.folder('objects');
-        metadata.forEach(m => objectsFolder.file(`${m.fullName}.object`, generateCustomObjectFile(m)));
-        if (includePermissonSet) {
-            const permissionSetFolder = zip.folder('permissionsets');
-            metadata.forEach(m => 
-                permissionSetFolder.file(`${getPermissionSetName(m.label)}.permissionset`, 
-                    generatePermissionSetFile(getPermissionSetJson(m))));
+            const objectsFolder = zip.folder('objects');
+            metadata.forEach(m => objectsFolder.file(`${m.fullName}.object`, generateCustomObjectFile(m)));
+            if (includePermissonSet) {
+                const permissionSetFolder = zip.folder('permissionsets');
+                metadata.forEach(m => 
+                    permissionSetFolder.file(`${getPermissionSetName(m.label)}.permissionset`, 
+                        generatePermissionSetFile(getPermissionSetJson(m))));
+            }
+
+            const packageXml = generatePackageXmlFile({ 
+                objectNames : metadata.map(m => m.fullName),
+                permissionSets : includePermissonSet 
+                    ? metadata.map(m => getPermissionSetName(m.label)) 
+                    : null
+            });
+            
+            zip.file('package.xml', packageXml);
+
+            const fileName = `objects_for_deploy.zip`;
+
+            resp.attachment(fileName);
+
+            zip.generateNodeStream({ 
+                    type: 'nodebuffer', 
+                    streamFiles: true, 
+                    compression : 'DEFLATE',
+                })
+                .pipe(resp)
+                .on('finish', () => {
+                    console.log(`${fileName} saved`);
+                })
+                .on('error', (err) => {
+                    return renderPage(resp, selectedTables, 'Ok ' + selectedTables.join(', '), err.message)
+                })
+            
+        } catch (e) {
+            console.error('error:', e);
+            return renderPage(resp, selectedTables, e.message || e || 'Something goes wrong, check log file');
         }
-
-        const packageXml = generatePackageXmlFile({ 
-            objectNames : metadata.map(m => m.fullName),
-            permissionSets : includePermissonSet 
-                ? metadata.map(m => getPermissionSetName(m.label)) 
-                : null
-        });
-        zip.file('package.xml', packageXml);
-
-        const fileName = `objects_for_deploy.zip`;
-
-        resp.attachment(fileName);
-
-        zip.generateNodeStream({ 
-                type: 'nodebuffer', 
-                streamFiles: true, 
-                compression : 'DEFLATE',
-            })
-            .pipe(resp)
-            .on('finish', () => {
-                console.log(`${fileName} saved`);
-            })
-            .on('error', (err) => {
-                return renderPage(resp, selectedTables, 'Ok ' + selectedTables.join(', '), err.message)
-            })
     }
-    
-
 })
 
 function generateCustomObjectFile(metadataJson) {
