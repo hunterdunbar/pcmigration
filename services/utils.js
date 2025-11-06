@@ -1,4 +1,4 @@
-
+const crypto = require('crypto');
 class ResponseWrapper {
 
     isSuccessful = true;
@@ -45,10 +45,16 @@ const JOB_STATUS = {
     Error : 'Error'
 }
 
+function hash20base64(str) {
+    const hash = crypto.createHash('sha256').update(str).digest('base64');
+    return hash.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+}
+
 
 
 module.exports = {
     ResponseWrapper,
     bindDataToResp,
-    JOB_STATUS
+    JOB_STATUS,
+    hash20base64
 }

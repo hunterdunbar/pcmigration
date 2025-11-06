@@ -9,7 +9,7 @@ const { JOB_STATUS } = require('./services/utils');
 
 
 
-const { convertColumnNameToSFformat, getExternalIdFieldName } = require('./services/salesforce')
+const { getExternalIdFieldName, getMappedFieldName } = require('./services/salesforce')
 const { processInfoLogging } = require('./services/processInfo');
 
 const { 
@@ -51,8 +51,8 @@ const cluster = require('cluster');
         const countOfRowsInTargetTableRes = await query(`select count(*) from ${hcSchema}.${targetTable}`);
         const countOfRowsInTargetTable = countOfRowsInTargetTableRes?.rows?.[0]?.count;
 
-        const sourceColumns = tableMetada?.rows.map(r => r.columnName).join(',');
-        const targetColumns = tableMetada?.rows.map(r => convertColumnNameToSFformat(r.columnName)).join(',')
+        const sourceColumns = tableMetada?.rows.map(r => `"${r.columnName}"`).join(',');
+        const targetColumns = tableMetada?.rows.map((r, i) => getMappedFieldName(r.columnName, i)).join(',')
 
         //get count of objects
         const countOfRowsRes = await query(`select count(*) from ${pcSchema}.${sourceTable}`);

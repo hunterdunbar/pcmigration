@@ -50,6 +50,10 @@ html
 				display: flex;
 				justify-content: center;
 			}
+
+			#selectAll {
+				cursor: pointer;
+			}
 	body
 		.error-message= errorMessage
 		form(action="/generatePackageXml" method="post" id="packageXmlForm") 
@@ -57,6 +61,7 @@ html
 				thead
 					tr
 						th
+							input(type="checkbox", id="selectAll")
 						//- th Schema Name
 						th Table Name
 						th Number Of Columns
@@ -69,6 +74,7 @@ html
 									,name= "selectedTables"
 									,value= val.tablename 
 									,checked= (selectedTables && selectedTables.includes(val.tablename) || null)
+									,class="table-checkbox"
 								)
 
 							//- td #{val.schemaname}
@@ -80,3 +86,44 @@ html
 				label(for="includePermissonSet") Include Permission Set 
 			//- Centering the button under the table
 		button(type="submit" form="packageXmlForm") Get package.xml
+
+		script.
+			document.addEventListener('DOMContentLoaded', function() {
+				const selectAllCheckbox = document.getElementById('selectAll');
+				const tableCheckboxes = document.querySelectorAll('.table-checkbox');
+
+				// Handle select all checkbox change
+				selectAllCheckbox.addEventListener('change', function() {
+					const isChecked = this.checked;
+					tableCheckboxes.forEach(function(checkbox) {
+						checkbox.checked = isChecked;
+					});
+				});
+
+				// Handle individual checkbox changes to update select all state
+				tableCheckboxes.forEach(function(checkbox) {
+					checkbox.addEventListener('change', function() {
+						updateSelectAllState();
+					});
+				});
+
+				// Function to update the "select all" checkbox state
+				function updateSelectAllState() {
+					const checkedCount = document.querySelectorAll('.table-checkbox:checked').length;
+					const totalCount = tableCheckboxes.length;
+					
+					if (checkedCount === 0) {
+						selectAllCheckbox.checked = false;
+						selectAllCheckbox.indeterminate = false;
+					} else if (checkedCount === totalCount) {
+						selectAllCheckbox.checked = true;
+						selectAllCheckbox.indeterminate = false;
+					} else {
+						selectAllCheckbox.checked = false;
+						selectAllCheckbox.indeterminate = true;
+					}
+				}
+
+				// Initialize the select all state on page load
+				updateSelectAllState();
+			});

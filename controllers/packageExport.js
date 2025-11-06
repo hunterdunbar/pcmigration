@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { validateSession } = require('./../services/security');
-const { getTablesInSchemas, getTableMetadata } = require('./../services/db');
+const { getTablesInSchemas } = require('./../services/db');
 const { getMetadataJson, getPermissionSetJson, getPermissionSetName } = require('./../services/salesforce');
 
 const xmlConverter = require('xml-js');
@@ -50,7 +50,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
             (Array.isArray(selectedTables) ? selectedTables : [ selectedTables ])
                 .map(tableName => getMetadataJson(pcSchema, tableName))
         ).catch(e => {
-            console.error(e);
+            console.error('error:', e);
             return renderPage(resp, selectedTables, 'Something goes wrong, check log file');
         })
 

@@ -42,7 +42,7 @@ async function getTablesInSchemas(schemas = []) {
         throw new Error('No one schema is selected');
     }
     const result = await query(`select schemaname, tablename, pg_size_pretty( pg_total_relation_size(schemaname || '.' || tablename)) table_size, \
-        (select COUNT(*) from information_schema.columns where table_name = tablename) number_of_columns from pg_catalog.pg_tables \
+        (select COUNT(*) from information_schema.columns where table_name = tablename and table_schema = schemaname) number_of_columns from pg_catalog.pg_tables \
         where not(starts_with(tablename, '_')) and tableowner = $1 and schemaname in (${schemas.map((v, i) => '$' + (2 + i)).join(',')}) order by tablename`, 
         [ dbConfig.user, ...schemas ]);
 
@@ -59,7 +59,7 @@ async function getTablesInSchemas(schemas = []) {
 
 function getTableMetadata(schemaName, tableName) {
     return query(`select column_name "columnName", udt_name "dataType", character_maximum_length length \
-        from information_schema.columns where column_name != 'id' and not(starts_with(column_name, '__')) and table_schema = $1 and table_name = $2`, [schemaName, tableName]);
+        from information_schema.columns where column_name != 'id' and not(starts_with(column_name, '__')) and table_schema = $1 and table_name = $2 order by column_name`, [schemaName, tableName]);
 }
 
 async function getTablesInfo(tableNamesWithSchema = []) {

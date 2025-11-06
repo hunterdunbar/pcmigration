@@ -5,28 +5,32 @@ const {
     useLongTextAreaFieldType
 } = require('./../config/default');
 
+const { hash20base64 } = require('./../services/utils');
+
 const { getColumns } = require('./db');
 
+function replaceDoubleUnderscore(name) {
+    return name.replace(/(.)__(.)/gi, '$1_$2').replace(/_c$/i, '__c');
+}
 
 function getSalesforceCustomObjectName(tableName) {
-    tableName = tableName.replace(/(.)__([^c].)/gi, '$1_$2');
-    if (tableName.endsWith('__c')) {
-        return `${migratedCustomTablePrefix}_${tableName}`;
-    }
-    return `${migratedTablePrefix}_${tableName}__c`;
+    const hasedTableName = hash20base64(tableName); //20 chars hash to avoid issues with length and duplicates
+    const prefix = tableName.endsWith('__c') ? migratedCustomTablePrefix : migratedTablePrefix; //different prefix for custom and standard tables
+    return `${prefix}_${hasedTableName}__c`;
 }
 
 function getExternalIdFieldName() {
-    return 'id__c';
+    return 'field_id__c';
 }
 
+//deprecated
 function convertColumnNameToSFformat(columnName) {
     if (columnName === 'sfid') {
         return getExternalIdFieldName();
     }
 
     //replace double _ for column name from namespaces
-    columnName = columnName.replace(/(.)__([^c].)/gi, '$1_$2');
+    columnName = replaceDoubleUnderscore(columnName);
     
     //if prefix will be added then we may have an issue with field name length
     //so, for now i just don't add prefix to column name
@@ -35,13 +39,13 @@ function convertColumnNameToSFformat(columnName) {
     //return prefix + '_' + (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
 
 
-    return (columnName.indexOf('__c') > 0 ? columnName : columnName + '__c');
+    return (columnName.endsWith('__c') ? columnName : columnName + '__c');
 }
 
-const LONG_TEXT_LENGTH = 131072;
-const TEXT_LENGTH = 255;
 const TEXT_TYPE = 'Text';
 const LONG_TEXT_TYPE = 'LongTextArea';
+const BOOLEAN_TYPE = 'Checkbox';
+const MAPPED_FIELD_NAME = 'field';
 
 function getFieldMetadata(column) {
 
@@ -51,36 +55,51 @@ function getFieldMetadata(column) {
         return { length : 18, type : TEXT_TYPE }
     }
 
-    if (dataType === 'text' || (dataType === 'varchar' && (useLongTextAreaFieldType || length >= 255))) {
-        return { length : LONG_TEXT_LENGTH, type : LONG_TEXT_TYPE };
+    if (dataType === 'bool' || dataType === 'boolean') {
+        return { length : null, type : BOOLEAN_TYPE };
     }
 
-    return { length : TEXT_LENGTH, type : TEXT_TYPE };
+    if (dataType === 'text' || (dataType === 'varchar' && (useLongTextAreaFieldType || length > 255))) {
+        return { length, type : LONG_TEXT_TYPE };
+    }
+
+    return { length : length ? length : 10, type : TEXT_TYPE };
 }
 
 async function getMetadataJson(schemaName, tableName) {
     const columns = await getColumns(schemaName, tableName);
-    const objectName = getSalesforceCustomObjectName(tableName)
+    const objectName = getSalesforceCustomObjectName(tableName);
+
     return {
         fullName : objectName,
-        label : objectName,
-        pluralLabel : objectName,
+        description : tableName,
+        label : tableName.slice(0, 40), //max label length is 40
+        pluralLabel : tableName.slice(0, 40), //max label length is 40
         deploymentStatus: 'Deployed',
         sharingModel: 'ReadWrite',
         nameField: {
             type: 'AutoNumber',
             label: 'Auto Number'
         },
-        fields : columns.map(column => {
+        fields : columns.map((column, i) => {
             const { type, length } = getFieldMetadata(column);
+            const isSfId = column.columnName === 'sfid';
             const sfField = {
-                fullName : convertColumnNameToSFformat(column.columnName),
-                label : column.columnName,
+                fullName : getMappedFieldName(column.columnName, i),
+                description : column.columnName,
+                label : column.columnName.slice(0, 40), //max label length is 40
                 type,
-                length,
-                externalId : column.columnName === 'sfid',
-                unique : column.columnName === 'sfid',
+                externalId : isSfId,
+                unique : isSfId
             };
+
+            if (type === BOOLEAN_TYPE) {
+                sfField.defaultValue = 'false';
+            }
+
+            if (length) {
+                sfField.length = length;
+            }
 
             if (sfField.type === 'LongTextArea') {
                 sfField.visibleLines = 3;
@@ -119,10 +138,18 @@ function getPermissionSetName(objectName) {
     return `${PERMISION_SET_NAME_TEMPLATE} ${objectName}`.replaceAll(' ', '_').replaceAll('__', '_');
 }
 
+function getMappedFieldName(name, index) {
+    if (name === 'sfid') {
+        return getExternalIdFieldName(); //keep sfid as is for external id field
+    }
+    return `${MAPPED_FIELD_NAME}_${index}__c`; //mapped field names to avoid issues with length or duplicates
+}
+
 module.exports = {
     convertColumnNameToSFformat,
     getExternalIdFieldName,
     getMetadataJson,
     getPermissionSetJson,
-    getPermissionSetName
+    getPermissionSetName,
+    getMappedFieldName
 }
