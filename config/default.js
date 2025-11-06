@@ -11,7 +11,6 @@ module.exports = {
     numberOfThreads : process.env.NUMBER_OF_THREADS || os.cpus().length,
     appPassword : process.env.APP_PASS || null,
     appUsername : process.env.APP_USERNAME || null,
-    migratedTablePrefix : process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 'migrated',
-    migratedCustomTablePrefix : process.env.MIGRATED_CUSTOM_OBJECT_PREFIX || 'migrated_custom',
-    useLongTextAreaFieldType : process.env.USE_LONG_TEXT_AREA_FIELD_TYPE === 'true' || false,
+    migratedTablePrefix : process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 'mig',
+    migratedCustomTablePrefix : process.env.MIGRATED_CUSTOM_OBJECT_PREFIX || 'migc'
 }

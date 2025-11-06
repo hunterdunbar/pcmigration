@@ -1,11 +1,10 @@
 
 const { 
-    migratedCustomTablePrefix, 
     migratedTablePrefix,
-    useLongTextAreaFieldType
+    migratedCustomTablePrefix
 } = require('./../config/default');
 
-const { hash20base64 } = require('./../services/utils');
+const { hashWithBase64 } = require('./../services/utils');
 
 const { getColumns } = require('./db');
 
@@ -15,9 +14,13 @@ function replaceDoubleUnderscore(name) {
     return name.replace(/(.)__(.)/gi, '$1_$2').replace(/_c$/i, '__c');
 }
 
+function getPrefixBasedOnTableName(tableName) {
+    return tableName.endsWith('__c') ? migratedCustomTablePrefix : migratedTablePrefix; //different prefix for custom and standard tables
+}
+
 function getSalesforceCustomObjectName(tableName) {
-    const hasedTableName = hash20base64(tableName); //20 chars hash to avoid issues with length and duplicates
-    const prefix = tableName.endsWith('__c') ? migratedCustomTablePrefix : migratedTablePrefix; //different prefix for custom and standard tables
+    const hasedTableName = hashWithBase64(tableName); //20 chars hash to avoid issues with length and duplicates
+    const prefix = getPrefixBasedOnTableName(tableName);
     return `${prefix}_${hasedTableName}__c`;
 }
 
@@ -61,8 +64,8 @@ function getFieldMetadata(column) {
         return { length : null, type : BOOLEAN_TYPE };
     }
 
-    if (dataType === 'text' || (dataType === 'varchar' && (useLongTextAreaFieldType || length > 255))) {
-        return { length : length || 256, type : LONG_TEXT_TYPE };
+    if (length > 255) {
+        return { length, type : LONG_TEXT_TYPE };
     }
 
     return { length : length || 1, type : TEXT_TYPE };
@@ -76,14 +79,13 @@ async function getMetadataJson(schemaName, tableName) {
     //get columns for table with information about max column length, it may take time for large tables
     const columns = await getColumns(schemaName, tableName)
 
-    //convert sf object name to new object name to prevent issues with length and duplicates
-    const objectName = getSalesforceCustomObjectName(tableName);
-
+    const prefix = getPrefixBasedOnTableName(tableName);
+    const newLabel = `${prefix}_${tableName}`;
     const result = {
-        fullName : objectName,
+        fullName : getSalesforceCustomObjectName(tableName), //convert sf object name to new object name to prevent issues with length and duplicates
         description : makeDescriptionJson(version, tableName),
-        label : tableName.slice(0, 40), //max label length is 40
-        pluralLabel : tableName.slice(0, 40), //max label length is 40
+        label : newLabel.slice(0, 40), //max label length is 40
+        pluralLabel : newLabel.slice(0, 40), //max label length is 40
         deploymentStatus: 'Deployed',
         sharingModel: 'ReadWrite',
         nameField: {

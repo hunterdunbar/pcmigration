@@ -45,9 +45,9 @@ const JOB_STATUS = {
     Error : 'Error'
 }
 
-function hash20base64(str) {
+function hashWithBase64(str, length = 20) {
     const hash = crypto.createHash('sha256').update(str).digest('base64');
-    return hash.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+    return hash.replace(/[^a-zA-Z0-9]/g, '').slice(0, length);
 }
 
 
@@ -64,6 +64,6 @@ module.exports = {
     ResponseWrapper,
     bindDataToResp,
     JOB_STATUS,
-    hash20base64,
+    hashWithBase64,
     timeoutPromise
 }
