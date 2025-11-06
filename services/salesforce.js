@@ -67,7 +67,11 @@ function getFieldMetadata(column) {
 }
 
 async function getMetadataJson(schemaName, tableName) {
-    const columns = await getColumns(schemaName, tableName);
+
+    //get columns for table with information about max column length, it may take time for large tables
+    const columns = await getColumns(schemaName, tableName)
+
+    //convert sf object name to new object name to prevent issues with length and duplicates
     const objectName = getSalesforceCustomObjectName(tableName);
 
     return {

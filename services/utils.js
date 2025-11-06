@@ -51,10 +51,19 @@ function hash20base64(str) {
 }
 
 
+function timeoutPromise(message, timeout = 30000) {
+    return new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(message);
+        }, timeout);
+    });
+}
+
 
 module.exports = {
     ResponseWrapper,
     bindDataToResp,
     JOB_STATUS,
-    hash20base64
+    hash20base64,
+    timeoutPromise
 }

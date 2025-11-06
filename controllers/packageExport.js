@@ -15,19 +15,28 @@ const JSZip = require('jszip');
 async function renderPage(resp, selectedTables = null, errorMessage = null) {
 
     if (!pcSchema) {
-        errorMessage = 'Privacy Center (PC) schema is not defined';
+        return resp.render('packageExport', { 
+            tables : [], 
+            selectedTables : [],
+            errorMessage : 'Privacy Center schema (PC_SCHEMA) is not defined'
+        });
     }
 
-    let data = null;
-    if (pcSchema) {
-        data = await getTablesInSchemas([ pcSchema ]).catch(e => errorMessage = e.message);
+    try {
+        let data = await getTablesInSchemas([ pcSchema ]);
+        return resp.render('packageExport', { 
+            tables : data?.[pcSchema] || [], 
+            selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
+            errorMessage 
+        });
+    } catch (e) {
+        console.error('error:', e);
+        return resp.render('packageExport', { 
+            tables : [], 
+            selectedTables : [],
+            errorMessage : e.message  || e
+        });
     }
-
-    resp.render('packageExport', { 
-        tables : data?.[pcSchema] || [], 
-        selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
-        errorMessage 
-    });
 }
 
 router.get('/packageExport', validateSession(), async (req, resp) => {
@@ -58,10 +67,6 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
             return renderPage(resp, selectedTables, 'Table Info not found in schema ' + pcSchema)
         }
 
-        
-
-        // console.debug(objectXml);
-        // console.debug(packageXml);
 
         const zip = new JSZip();
         

@@ -5,6 +5,7 @@ const { Readable, Writable } = require('stream');
 
 const { clientDbUrl, hcSchema, useLongTextAreaFieldType } = require('./../config/default');
 
+const { timeoutPromise } = require('./../services/utils');
 
 if (!clientDbUrl) {
     throw new Error('CLIENT_DATABASE_URL is not defined');
@@ -21,10 +22,15 @@ const pool = new Pool({
     connectionTimeoutMillis: 0,
 })
 
+const DATABASE_REQUEST_TIMEOUT = 30000; //30 seconds
+
 async function query(sql, params) {
     const client = await pool.connect();
     try {
-        return client.query(sql, params);
+        return Promise.race([
+            timeoutPromise('This may be caused by selecting too many tables or by tables containing large amounts of data. Please try again with fewer or smaller tables.', DATABASE_REQUEST_TIMEOUT),
+            client.query(sql, params)
+        ])
     } finally {
         client.release();
     }
