@@ -63,6 +63,14 @@ function getFieldMetadata(column) {
         return { length : 5, type : TEXT_TYPE };
     }
 
+    if (dataType === 'date') {
+        return { length : 10, type : TEXT_TYPE };
+    }
+
+    if (dataType === 'timestamp') {
+        return { length : 25, type : TEXT_TYPE };
+    }
+
     if (length > 255) {
         return { length, type : LONG_TEXT_TYPE };
     }
