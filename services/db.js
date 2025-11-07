@@ -65,7 +65,7 @@ async function getTablesInSchemas(schemas = []) {
 
 function getTableMetadata(schemaName, tableName) {
     return query(`select column_name "columnName", udt_name "dataType", character_maximum_length length \
-        from information_schema.columns where column_name != 'id' and not(starts_with(column_name, '__')) and table_schema = $1 and table_name = $2 order by column_name`, [schemaName, tableName]);
+        from information_schema.columns where column_name != 'id' and not(starts_with(column_name, '__')) and table_schema = $1 and table_name = $2 order by column_name`, [schemaName, tableName.toLowerCase()]);
 }
 
 async function getTablesInfo(tableNamesWithSchema = []) {

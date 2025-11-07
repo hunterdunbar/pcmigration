@@ -48,14 +48,14 @@ const cluster = require('cluster');
         const tableMetada = await getTableMetadata(pcSchema, sourceTable);
 
         //get count of objects
-        const countOfRowsInTargetTableRes = await query(`select count(*) from ${hcSchema}.${targetTable}`);
+        const countOfRowsInTargetTableRes = await query(`select count(*) from ${hcSchema}.${targetTable.toLowerCase()}`);
         const countOfRowsInTargetTable = countOfRowsInTargetTableRes?.rows?.[0]?.count;
 
-        const sourceColumns = tableMetada?.rows.map(r => `"${r.columnName}"`).join(',');
+        const sourceColumns = tableMetada?.rows.map(r => `${r.columnName}`).join(',');
         const targetColumns = tableMetada?.rows.map((r, i) => getMappedFieldName(r.columnName, i)).join(',')
 
         //get count of objects
-        const countOfRowsRes = await query(`select count(*) from ${pcSchema}.${sourceTable}`);
+        const countOfRowsRes = await query(`select count(*) from ${pcSchema}.${sourceTable.toLowerCase()}`);
         const countOfRows = countOfRowsRes?.rows?.[0]?.count;
 
         const countOfJobs =  Math.ceil((1*countOfRows)/(1 * bulkLimit));
@@ -156,7 +156,8 @@ const cluster = require('cluster');
         //     }, 10000)
         // })
         const externalId = getExternalIdFieldName();
-        const queryString = `insert into ${hcSchema}.${targetTable}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} order by id limit ${bulkLimit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
+        const queryString = `insert into ${hcSchema}.${targetTable.toLowerCase()}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} order by id limit ${bulkLimit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
+        console.debug(queryString);
         let critialError = false;
         try {
             await query(queryString);
