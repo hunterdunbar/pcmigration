@@ -171,7 +171,7 @@ function getMappedFieldName(name, index) {
 function makeDescriptionJson(version, apiName) {
     return JSON.stringify({
         version,
-        apiName
+        apiName : apiName === 'sfid' ? 'Id' : apiName
     });
 }
 
