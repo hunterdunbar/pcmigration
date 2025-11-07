@@ -137,7 +137,7 @@ const PERMISION_SET_NAME_TEMPLATE = 'PCMA Permission Set For';
 
 function getPermissionSetJson(objectMetadata) {
     return {
-        label : `${PERMISION_SET_NAME_TEMPLATE} ${objectMetadata.fullName}`,
+        label : `${PERMISION_SET_NAME_TEMPLATE} ${objectMetadata.label}`,
         fieldPermissions : objectMetadata.fields.map(field => {
             return {
                 editable : true,
