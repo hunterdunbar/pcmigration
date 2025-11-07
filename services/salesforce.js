@@ -49,7 +49,6 @@ function convertColumnNameToSFformat(columnName) {
 
 const TEXT_TYPE = 'Text';
 const LONG_TEXT_TYPE = 'LongTextArea';
-const BOOLEAN_TYPE = 'Checkbox';
 const MAPPED_FIELD_NAME = 'field';
 
 function getFieldMetadata(column) {
@@ -61,7 +60,7 @@ function getFieldMetadata(column) {
     }
 
     if (dataType === 'bool' || dataType === 'boolean') {
-        return { length : null, type : BOOLEAN_TYPE };
+        return { length : 5, type : TEXT_TYPE };
     }
 
     if (length > 255) {
@@ -100,17 +99,10 @@ async function getMetadataJson(schemaName, tableName) {
                 description : makeDescriptionJson(version, column.columnName),
                 label : column.columnName.slice(0, 40), //max label length is 40
                 type,
+                length,
                 externalId : isSfId,
                 unique : isSfId
             };
-
-            if (type === BOOLEAN_TYPE) {
-                sfField.defaultValue = 'false';
-            }
-
-            if (length) {
-                sfField.length = length;
-            }
 
             if (sfField.type === 'LongTextArea') {
                 sfField.visibleLines = 3;
