@@ -149,21 +149,15 @@ const cluster = require('cluster');
 
         process.send(JSON.stringify(msg));
 
-        //run a query
-        // await new Promise(resolve  => {
-        //     setTimeout(() => {
-        //         resolve();
-        //     }, 10000)
-        // })
         const externalId = getExternalIdFieldName();
         const queryString = `insert into ${hcSchema}.${targetTable.toLowerCase()}(${currentJob.targetColumns}) select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} order by id limit ${bulkLimit} offset ${currentJob.offset} ON CONFLICT (${externalId}) DO NOTHING`
-        console.debug(queryString);
+
         let critialError = false;
         try {
             await query(queryString);
             msg.status = JOB_STATUS.Completed;
         } catch (e) {
-            console.error('ERROR: ' + process.pid, { e, currentJob });
+            console.error('ERROR: ' + process.pid, { e, currentJob, queryString });
             msg.status = JOB_STATUS.Error;
             critialError = true;
         }
