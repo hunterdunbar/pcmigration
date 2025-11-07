@@ -83,7 +83,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
                     ? metadata.map(m => getPermissionSetName(m.label)) 
                     : null
             });
-            
+
             zip.file('package.xml', packageXml);
 
             const fileName = `objects_for_deploy.zip`;
@@ -100,7 +100,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
                     console.log(`${fileName} saved`);
                 })
                 .on('error', (err) => {
-                    return renderPage(resp, selectedTables, 'Ok ' + selectedTables.join(', '), err.message)
+                    return renderPage(resp, selectedTables, err.message)
                 })
             
         } catch (e) {
