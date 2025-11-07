@@ -22,7 +22,7 @@ const pool = new Pool({
     connectionTimeoutMillis: 0,
 })
 
-const DATABASE_REQUEST_TIMEOUT = 30000; //30 seconds
+const DATABASE_REQUEST_TIMEOUT = 5000; //30 seconds
 
 async function query(sql, params) {
     const client = await pool.connect();
