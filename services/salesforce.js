@@ -51,6 +51,9 @@ const TEXT_TYPE = 'Text';
 const LONG_TEXT_TYPE = 'LongTextArea';
 const MAPPED_FIELD_NAME = 'field';
 
+//if data type is int4, float8, int8 the app uses this default length for salesforce text fields
+const DEFAULT_TEXT_LENGTH = 50;
+
 function getFieldMetadata(column) {
 
     const { columnName, dataType, length} = column;
@@ -75,7 +78,7 @@ function getFieldMetadata(column) {
         return { length, type : LONG_TEXT_TYPE };
     }
 
-    return { length : length || 1, type : TEXT_TYPE };
+    return { length : length || DEFAULT_TEXT_LENGTH, type : TEXT_TYPE };
 }
 
 
