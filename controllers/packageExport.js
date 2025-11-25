@@ -142,7 +142,6 @@ router.post('/analyzePrivacyCenter', (req, resp) => {
     //don't need to await result here
     if (!viewCreationInProgress) {
         viewCreationInProgress = true;
-        console.debug('Starting materialized view creation...');
         buildMaterializedViewWithTablesInfo()
             .catch(err => {
                 console.error('Error during materialized view creation:', err);
@@ -150,7 +149,6 @@ router.post('/analyzePrivacyCenter', (req, resp) => {
                 viewCreationInProgress = false;
             });
 
-        console.debug('Finished materialized view creation.');
     }
     return resp.redirect('/packageExport');
     
