@@ -2,39 +2,56 @@
 const express = require('express');
 const router = express.Router();
 const { validateSession } = require('./../services/security');
-const { getTablesInSchemas } = require('./../services/db');
-const { getMetadataJson, getPermissionSetJson, getPermissionSetName } = require('./../services/salesforce');
+const { 
+    getTablesInSchemas, 
+    buildMaterializedViewWithTablesInfo,
+    isMaterializedViewExisting
+} = require('./../services/db');
 
-const xmlConverter = require('xml-js');
-const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
+const {
+    getMetadataJson, 
+    getPermissionSetJson, 
+    getPermissionSetName,
+    generateCustomObjectFile,
+    generatePermissionSetFile,
+    generatePackageXmlFile
+} = require('./../services/salesforce');
 
 const { pcSchema } = require('../config/default')
 
 const JSZip = require('jszip');
 
-async function renderPage(resp, selectedTables = null, errorMessage = null) {
+async function renderPage(resp, selectedTables = null, errorMessage = null, message = null) {
 
     if (!pcSchema) {
         return resp.render('packageExport', { 
             tables : [], 
             selectedTables : [],
-            errorMessage : 'Privacy Center schema (PC_SCHEMA) is not defined'
+            errorMessage : 'Privacy Center schema (PC_SCHEMA) is not defined',
+            message,
+            showAnalyzeButton: false
         });
     }
+
+    const isViewExisting = await isMaterializedViewExisting();
 
     try {
         let data = await getTablesInSchemas([ pcSchema ]);
         return resp.render('packageExport', { 
             tables : data?.[pcSchema] || [], 
             selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
-            errorMessage 
+            errorMessage,
+            message : !isViewExisting ? 'Please hit Analyze Privacy Center button to run the analysis. Refresh the page until the Analyse Privacy Center button disappears.' : message,
+            showAnalyzeButton: !isViewExisting
         });
     } catch (e) {
         console.error('error:', e);
         return resp.render('packageExport', { 
             tables : [], 
             selectedTables : [],
-            errorMessage : e.message  || e
+            errorMessage : e.message  || e,
+            message,
+            showAnalyzeButton: !isViewExisting
         });
     }
 }
@@ -46,7 +63,6 @@ router.get('/packageExport', validateSession(), async (req, resp) => {
 router.get('/generatePackageXml', (req, resp) => {
     resp.redirect('/packageExport')
 })
-
 
 router.post('/generatePackageXml', validateSession(), async (req, resp) => {
 
@@ -110,64 +126,12 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
     }
 })
 
-function generateCustomObjectFile(metadataJson) {
-    return convertToXml({
-        "_declaration" : { 
-            "_attributes" : { "version" : "1.0" , "encoding":"utf-8" } 
-        },
-        CustomObject : {
-            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
-            ...metadataJson
-        }
-    })
-}
+router.post('/analyzePrivacyCenter', validateSession(), async (req, resp) => {
+    //don't need to await here
+    buildMaterializedViewWithTablesInfo();
+    
+    return renderPage(resp, null, null, 'Analyze of Privacy Center has been started in background. You can continue your work when the process is complete. Refresh the page until the Analyse Privacy Center button disappears.');
 
-function generatePermissionSetFile(metadataJson) {
-    return convertToXml({
-        "_declaration" : { 
-            "_attributes" : { "version" : "1.0" , "encoding":"utf-8" } 
-        },
-        PermissionSet : {
-            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
-            ...metadataJson
-        }
-    })
-}
-
-
-function generatePackageXmlFile({ objectNames = [], permissionSets = [] }) {
-    const packageXmlJson = {
-        "_declaration" : { 
-            "_attributes" : { "version" : "1.0" , "encoding":"UTF-8" } 
-        },
-        Package : {
-            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
-            types : [        
-                { 
-                    members : objectNames,
-                    name : 'CustomObject'
-                }
-            ],
-            version : '55.0'
-        }
-    }
-
-    if (permissionSets?.length) {
-        packageXmlJson.Package.types = [
-            ...packageXmlJson.Package.types,
-            {   
-                members : permissionSets,
-                name : 'PermissionSet'
-            }
-        ]
-    }
-
-    return convertToXml(packageXmlJson)
-}
-
-
-function convertToXml(jsonObject) {
-    return xmlConverter.js2xml(jsonObject, xmlConverterOptions)
-}
+})
 
 module.exports = router

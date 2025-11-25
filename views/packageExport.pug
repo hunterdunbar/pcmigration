@@ -45,7 +45,20 @@ html
 				margin-bottom: 10px;
 			}
 
-			.permision-set-box {
+			.message {
+				background-color: #d4edda;
+				color: #155724;
+				padding: 15px 20px;
+				margin-bottom: 20px;
+				border-radius: 8px;
+				border: 1px solid #c3e6cb;
+				font-weight: 500;
+				box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+				width: 60%;
+				text-align: center;
+			}
+
+			.permission-set-box {
 				margin-top: 20px;
 				display: flex;
 				justify-content: center;
@@ -54,7 +67,30 @@ html
 			#selectAll {
 				cursor: pointer;
 			}
+
+			.analyze-button {
+				margin-bottom: 20px;
+				padding: 10px 20px;
+				background-color: #2196F3;
+				color: white;
+				border: none;
+				cursor: pointer;
+			}
+
+			.analyze-button:hover {
+				background-color: #0b7dda;
+			}
+
+			.analyze-form {
+				width: 100%;
+				display: flex;
+				justify-content: center;
+			}
 	body
+		if showAnalyzeButton
+			form.analyze-form(action="/analyzePrivacyCenter" method="post" id="analyzeForm")
+				button.analyze-button(type="submit" form="analyzeForm") Analyze Privacy Center
+		.message= message
 		.error-message= errorMessage
 		form(action="/generatePackageXml" method="post" id="packageXmlForm") 
 			table(name="tables" id="tables")
@@ -81,10 +117,10 @@ html
 							td #{val.tablename}
 							td #{val.number_of_columns}
 							td #{val.table_size}
-			.permision-set-box
+			.permission-set-box
 				input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
 				label(for="includePermissonSet") Include Permission Set 
-			//- Centering the button under the table
+		//- Centering the button under the table
 		button(type="submit" form="packageXmlForm") Get package.xml
 
 		script.
