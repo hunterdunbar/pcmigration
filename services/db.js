@@ -268,6 +268,7 @@ BEGIN
 		AND not(starts_with(t.tablename, '_'))
 		  -- Ignore columns that start with '_'
 		AND not(starts_with(c.column_name, '__')) AND c.column_name != 'id'
+        AND c.udt_name IN ('varchar', 'text')
         ORDER BY c.table_schema, c.table_name, c.ordinal_position
     ) s;
 
