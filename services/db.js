@@ -23,7 +23,7 @@ const pool = new Pool({
 async function query(sql, params) {
     const client = await pool.connect();
     try {
-        client.query(sql, params)
+        return client.query(sql, params)
     } finally {
         client.release();
     }
