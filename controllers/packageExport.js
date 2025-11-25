@@ -138,7 +138,7 @@ router.get('/analyzePrivacyCenter', (req, resp) => {
 })
 
 
-router.post('/analyzePrivacyCenter', async (req, resp) => {
+router.post('/analyzePrivacyCenter', (req, resp) => {
     //don't need to await result here
     if (!viewCreationInProgress) {
         viewCreationInProgress = true;
