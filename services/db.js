@@ -93,7 +93,7 @@ async function getTablesInfo(tableNamesWithSchema = []) {
 
 async function queryCursor(sql, params, config = {}, callback) {
     const client = await pool.connect();
-    const cursor = await client.query(new Cursor(sql, params));
+    const cursor = client.query(new Cursor(sql, params));
     
     try {
         let rows = []

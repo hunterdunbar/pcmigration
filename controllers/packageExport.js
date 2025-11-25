@@ -27,31 +27,35 @@ async function renderPage(resp, selectedTables = null, errorMessage = null, mess
         return resp.render('packageExport', { 
             tables : [], 
             selectedTables : [],
-            errorMessage : 'Privacy Center schema (PC_SCHEMA) is not defined',
-            message,
-            showAnalyzeButton: false
+            errorMessage : 'Privacy Center schema (PC_SCHEMA) is not defined'
         });
     }
 
     const isViewExisting = await isMaterializedViewExisting();
 
     try {
-        let data = await getTablesInSchemas([ pcSchema ]);
-        return resp.render('packageExport', { 
-            tables : data?.[pcSchema] || [], 
-            selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
-            errorMessage,
-            message : !isViewExisting ? 'Please hit Analyze Privacy Center button to run the analysis. Refresh the page until the Analyse Privacy Center button disappears.' : message,
-            showAnalyzeButton: !isViewExisting
-        });
+        if (isViewExisting) {
+            let data = await getTablesInSchemas([ pcSchema ]);
+            return resp.render('packageExport', { 
+                tables : data?.[pcSchema] || [], 
+                selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
+                errorMessage
+            });
+        } else {
+            return resp.render('packageExport', {
+                tables : [], 
+                selectedTables : [],
+                errorMessage,
+                message : message || 'Please hit Analyze Privacy Center button to run the analysis. Refresh the page until the Analyse Privacy Center button disappears.',
+                showAnalyzeButton : true
+            });
+        }
     } catch (e) {
         console.error('error:', e);
         return resp.render('packageExport', { 
             tables : [], 
             selectedTables : [],
-            errorMessage : e.message  || e,
-            message,
-            showAnalyzeButton: !isViewExisting
+            errorMessage : e.message  || e
         });
     }
 }
@@ -127,7 +131,7 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
 })
 
 router.post('/analyzePrivacyCenter', validateSession(), async (req, resp) => {
-    //don't need to await here
+    //don't need to await result here
     buildMaterializedViewWithTablesInfo();
     
     return renderPage(resp, null, null, 'Analyze of Privacy Center has been started in background. You can continue your work when the process is complete. Refresh the page until the Analyse Privacy Center button disappears.');

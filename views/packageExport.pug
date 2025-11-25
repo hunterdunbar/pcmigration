@@ -93,36 +93,37 @@ html
 		if message
 			.message= message
 		.error-message= errorMessage
-		form(action="/generatePackageXml" method="post" id="packageXmlForm") 
-			table(name="tables" id="tables")
-				thead
-					tr
-						th
-							input(type="checkbox", id="selectAll")
-						//- th Schema Name
-						th Table Name
-						th Number Of Columns
-						th Size
-				tbody
-					each val in tables
+		if tables.length !== 0
+			form(action="/generatePackageXml" method="post" id="packageXmlForm") 
+				table(name="tables" id="tables")
+					thead
 						tr
-							td
-								input(type="checkbox"
-									,name= "selectedTables"
-									,value= val.tablename 
-									,checked= (selectedTables && selectedTables.includes(val.tablename) || null)
-									,class="table-checkbox"
-								)
+							th
+								input(type="checkbox", id="selectAll")
+							//- th Schema Name
+							th Table Name
+							th Number Of Columns
+							th Size
+					tbody
+						each val in tables
+							tr
+								td
+									input(type="checkbox"
+										,name= "selectedTables"
+										,value= val.tablename 
+										,checked= (selectedTables && selectedTables.includes(val.tablename) || null)
+										,class="table-checkbox"
+									)
 
-							//- td #{val.schemaname}
-							td #{val.tablename}
-							td #{val.number_of_columns}
-							td #{val.table_size}
-			.permission-set-box
-				input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
-				label(for="includePermissonSet") Include Permission Set 
-		//- Centering the button under the table
-		button(type="submit" form="packageXmlForm") Get package.xml
+								//- td #{val.schemaname}
+								td #{val.tablename}
+								td #{val.number_of_columns}
+								td #{val.table_size}
+				.permission-set-box
+					input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
+					label(for="includePermissonSet") Include Permission Set 
+			//- Centering the button under the table
+			button(type="submit" form="packageXmlForm") Get package.xml
 
 		script.
 			document.addEventListener('DOMContentLoaded', function() {
