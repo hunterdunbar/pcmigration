@@ -87,11 +87,13 @@ html
 				justify-content: center;
 			}
 	body
+		if message
+			.message= message
+			
 		if showAnalyzeButton
 			form.analyze-form(action="/analyzePrivacyCenter" method="post" id="analyzeForm")
 				button.analyze-button(type="submit" form="analyzeForm") Analyze Privacy Center
-		if message
-			.message= message
+		
 		.error-message= errorMessage
 		if tables.length !== 0
 			form(action="/generatePackageXml" method="post" id="packageXmlForm") 

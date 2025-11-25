@@ -5,9 +5,11 @@ const router = express.Router();
 
 const loginCtrl = require('./login');
 const packageExportCtrl = require('./packageExport');
+const { validateSession } = require('./../services/security');
+
 
 router.use(loginCtrl);
-router.use(packageExportCtrl);
+router.use(validateSession(), packageExportCtrl);
 
 
 router.get('/', async (req, resp) => {

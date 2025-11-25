@@ -1,7 +1,6 @@
 
 const express = require('express');
 const router = express.Router();
-const { validateSession } = require('./../services/security');
 const { 
     getTablesInSchemas, 
     buildMaterializedViewWithTablesInfo,
@@ -21,7 +20,9 @@ const { pcSchema } = require('../config/default')
 
 const JSZip = require('jszip');
 
-async function renderPage(resp, selectedTables = null, errorMessage = null, message = null) {
+let viewCreationInProgress = false;
+
+async function renderPage(resp, selectedTables = null, errorMessage = null) {
 
     if (!pcSchema) {
         return resp.render('packageExport', { 
@@ -42,12 +43,15 @@ async function renderPage(resp, selectedTables = null, errorMessage = null, mess
                 errorMessage
             });
         } else {
+            const message = viewCreationInProgress 
+                ? 'Analyze of Privacy Center has been started in background. You can continue your work when the process is complete. Refresh the page until the Analyse Privacy Center button disappears.'
+                : 'Please hit Analyze Privacy Center button to run the analysis. Refresh the page until the Analyse Privacy Center button disappears.'
             return resp.render('packageExport', {
                 tables : [], 
                 selectedTables : [],
                 errorMessage,
-                message : message || 'Please hit Analyze Privacy Center button to run the analysis. Refresh the page until the Analyse Privacy Center button disappears.',
-                showAnalyzeButton : true
+                message,
+                showAnalyzeButton : !viewCreationInProgress
             });
         }
     } catch (e) {
@@ -60,7 +64,7 @@ async function renderPage(resp, selectedTables = null, errorMessage = null, mess
     }
 }
 
-router.get('/packageExport', validateSession(), async (req, resp) => {
+router.get('/packageExport', async (req, resp) => {
     return renderPage(resp)
 })
 
@@ -68,8 +72,7 @@ router.get('/generatePackageXml', (req, resp) => {
     resp.redirect('/packageExport')
 })
 
-router.post('/generatePackageXml', validateSession(), async (req, resp) => {
-
+router.post('/generatePackageXml', async (req, resp) => {
     const { selectedTables, includePermissonSet } = req.body;
 
     if (!selectedTables?.length) {
@@ -130,12 +133,22 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
     }
 })
 
-router.post('/analyzePrivacyCenter', validateSession(), async (req, resp) => {
-    //don't need to await result here
-    buildMaterializedViewWithTablesInfo();
-    
-    return renderPage(resp, null, null, 'Analyze of Privacy Center has been started in background. You can continue your work when the process is complete. Refresh the page until the Analyse Privacy Center button disappears.');
+router.get('/analyzePrivacyCenter', (req, resp) => {
+    resp.redirect('/packageExport')
+})
 
+
+router.post('/analyzePrivacyCenter', async (req, resp) => {
+    //don't need to await result here
+    buildMaterializedViewWithTablesInfo().then(() => {
+        viewCreationInProgress = true;
+    }).catch(err => {
+        console.error('Error during materialized view creation:', err);
+    }).finally(() => {
+        viewCreationInProgress = false;
+    });
+    
+    return renderPage(resp);
 })
 
 module.exports = router
