@@ -5,8 +5,6 @@ const { Readable, Writable } = require('stream');
 
 const { clientDbUrl, hcSchema, pcSchema } = require('./../config/default');
 
-const { timeoutPromise } = require('./../services/utils');
-
 if (!clientDbUrl) {
     throw new Error('CLIENT_DATABASE_URL is not defined');
 }
@@ -22,15 +20,10 @@ const pool = new Pool({
     connectionTimeoutMillis: 0,
 })
 
-const DATABASE_REQUEST_TIMEOUT = 29000; //29 seconds
-
 async function query(sql, params) {
     const client = await pool.connect();
     try {
-        return Promise.race([
-            timeoutPromise('Heroku Timeout Issue: This may be caused by selecting too many tables or by tables containing large amounts of data. Please try again with fewer or smaller tables.', DATABASE_REQUEST_TIMEOUT),
-            client.query(sql, params)
-        ])
+        client.query(sql, params)
     } finally {
         client.release();
     }

@@ -90,7 +90,8 @@ html
 		if showAnalyzeButton
 			form.analyze-form(action="/analyzePrivacyCenter" method="post" id="analyzeForm")
 				button.analyze-button(type="submit" form="analyzeForm") Analyze Privacy Center
-		.message= message
+		if message
+			.message= message
 		.error-message= errorMessage
 		form(action="/generatePackageXml" method="post" id="packageXmlForm") 
 			table(name="tables" id="tables")
