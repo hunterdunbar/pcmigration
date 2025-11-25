@@ -3,6 +3,7 @@ const enforce = require('express-sslify');
 const app = express();
 const path = require('path');
 const session = require('express-session');
+const nocache = require('nocache');
 
 const controllers = require('./controllers');
 
@@ -20,6 +21,9 @@ if (process.env.NODE_ENV !== 'development') {
     app.set('trust proxy', 1) // trust first proxy
     SESSION.cookie.secure = true // serve secure cookies
 }
+
+//no cache for all responses
+app.use(nocache());
 
 //setup session
 app.use(session(SESSION))
