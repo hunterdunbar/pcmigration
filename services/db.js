@@ -18,15 +18,11 @@ const pool = new Pool({
     },
     idleTimeoutMillis: 0,
     connectionTimeoutMillis: 0,
+    max : 20
 })
 
 async function query(sql, params) {
-    const client = await pool.connect();
-    try {
-        return client.query(sql, params)
-    } finally {
-        client.release();
-    }
+    return pool.query(sql, params);
     
 }
 

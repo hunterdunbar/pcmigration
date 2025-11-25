@@ -142,17 +142,15 @@ router.post('/analyzePrivacyCenter', (req, resp) => {
     //don't need to await result here
     if (!viewCreationInProgress) {
         viewCreationInProgress = true;
-        setTimeout(() => {
-            console.debug('Starting materialized view creation...');
-            buildMaterializedViewWithTablesInfo()
-                .catch(err => {
-                    console.error('Error during materialized view creation:', err);
-                }).finally(() => {
-                    viewCreationInProgress = false;
-                });
+        console.debug('Starting materialized view creation...');
+        buildMaterializedViewWithTablesInfo()
+            .catch(err => {
+                console.error('Error during materialized view creation:', err);
+            }).finally(() => {
+                viewCreationInProgress = false;
+            });
 
-            console.debug('Finished materialized view creation.');
-        }, 1000);
+        console.debug('Finished materialized view creation.');
     }
     return resp.redirect('/packageExport');
     
