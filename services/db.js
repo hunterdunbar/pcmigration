@@ -3,9 +3,7 @@ const { parse } = require('pg-connection-string');
 const Cursor = require('pg-cursor');
 const { Readable, Writable } = require('stream');
 
-const { clientDbUrl, hcSchema } = require('./../config/default');
-
-const { timeoutPromise } = require('./../services/utils');
+const { clientDbUrl, hcSchema, pcSchema } = require('./../config/default');
 
 if (!clientDbUrl) {
     throw new Error('CLIENT_DATABASE_URL is not defined');
@@ -20,20 +18,11 @@ const pool = new Pool({
     },
     idleTimeoutMillis: 0,
     connectionTimeoutMillis: 0,
+    max : 20
 })
 
-const DATABASE_REQUEST_TIMEOUT = 29000; //29 seconds
-
 async function query(sql, params) {
-    const client = await pool.connect();
-    try {
-        return Promise.race([
-            timeoutPromise('Heroku Timeout Issue: This may be caused by selecting too many tables or by tables containing large amounts of data. Please try again with fewer or smaller tables.', DATABASE_REQUEST_TIMEOUT),
-            client.query(sql, params)
-        ])
-    } finally {
-        client.release();
-    }
+    return pool.query(sql, params);
     
 }
 
@@ -100,7 +89,7 @@ async function getTablesInfo(tableNamesWithSchema = []) {
 
 async function queryCursor(sql, params, config = {}, callback) {
     const client = await pool.connect();
-    const cursor = await client.query(new Cursor(sql, params));
+    const cursor = client.query(new Cursor(sql, params));
     
     try {
         let rows = []
@@ -121,10 +110,12 @@ async function queryCursor(sql, params, config = {}, callback) {
 class QueryStream extends Readable {
 
     cursor;
+    client;
 
-    constructor(cursor, chunkSize) {
+    constructor(cursor, client, chunkSize) {
         super({ highWaterMark: chunkSize, objectMode : true });
         this.cursor = cursor;
+        this.client = client;
     }
 
     _read(size) {
@@ -141,7 +132,10 @@ class QueryStream extends Readable {
         if (err) {
             console.error('[ERROR]: QueryStream: ', err);
         }
-        this.cursor.close(callback)
+        this.cursor.close(() => {
+            this.client.release();
+            callback();
+        });
     }
 
 }
@@ -189,7 +183,7 @@ class HerokuSchemaWriter extends Writable {
 async function queryStream(sql, chunkSize) {
     const client = await pool.connect();
     const cursor = client.query(new Cursor(sql));
-    return new QueryStream(cursor, chunkSize);
+    return new QueryStream(cursor, client, chunkSize);
 }
 
 async function hcWriterStream(tableName) {
@@ -219,23 +213,130 @@ async function getColumns(schemaName, tableName) {
 
     //some of text columns don't have length, to create salesforce object we have to know max size of these
     const columnsWithoutLength = columns.filter(col => (col.dataType === 'varchar' || col.dataType === 'text') 
-        && !col.length && !col.columnName.startsWith('_') && col.columnName !== 'sfid').map(col => `max(LENGTH(${col.columnName})) as ${col.columnName}`);
+        && !col.length && !col.columnName.startsWith('_') && col.columnName !== 'sfid').map(col => col.columnName);
     
     
     if (columnsWithoutLength?.length) {
-        const queryToGetMaxLength = `select ${columnsWithoutLength.join(',')} from ${schemaName}.${tableName}`;
+        const queryToGetMaxLength = `select column_name, data_type, column_size from ${schemaName}.${PCMA_VIEW_NAME} where table_name = '${tableName}' and 
+            column_name in (${columnsWithoutLength.map(col => `'${col}'`).join(',')})`;
+        
         console.debug('QUERY for Max Lenth: ' + queryToGetMaxLength);
         const result = await query(queryToGetMaxLength);
         if (result.rows?.length) {
-            columns.forEach(col => {
-                if (result.rows[0][col.columnName]) {
-                    col.length = result.rows[0][col.columnName]
+            result.rows.forEach(row => {
+                const column = columns.find(col => col.columnName === row.column_name);
+                if (column && row.column_size) {
+                    column.length = row.column_size;
                 }
             })
         }
     }
 
     return columns;
+}
+
+const PCMA_VIEW_NAME = 'pcma_tables_info_mv';
+const PCMA_VIEW_SQL = `DO
+$$
+DECLARE
+    v_schema_name text := '${pcSchema}';
+    v_view_name   text := '${PCMA_VIEW_NAME}';
+
+    v_body_sql text;
+    v_full_sql text;
+BEGIN
+    -- Build the UNION ALL body (one SELECT per table/column)
+    SELECT string_agg(per_col_sql, E'\nUNION ALL\n')
+    INTO v_body_sql
+    FROM (
+        SELECT
+            format(
+                'SELECT %L::text AS schema_name,
+                        %L::text AS table_name,
+                        %L::text AS column_name,
+                        %L::text AS data_type,
+                        max(length(t.%I::text))::bigint AS column_size
+                 FROM %I.%I AS t',
+                c.table_schema,            -- schema_name literal
+                c.table_name,              -- table_name literal
+                c.column_name,             -- column_name literal
+                c.udt_name,               -- data_type literal
+                c.column_name,             -- column identifier
+                c.table_schema,            -- schema identifier
+                c.table_name               -- table identifier
+            ) AS per_col_sql
+        FROM pg_catalog.pg_tables t
+        JOIN information_schema.columns c
+          ON c.table_schema = t.schemaname
+         AND c.table_name   = t.tablename
+        WHERE t.schemaname = v_schema_name
+          -- ignore tables starting with '_'
+		AND not(starts_with(t.tablename, '_'))
+		  -- Ignore columns that start with '_'
+		AND not(starts_with(c.column_name, '__')) AND c.column_name != 'id'
+        AND c.udt_name IN ('varchar', 'text')
+        ORDER BY c.table_schema, c.table_name, c.ordinal_position
+    ) s;
+
+    IF v_body_sql IS NULL THEN
+        RAISE NOTICE 'No eligible tables/columns found in schema %', v_schema_name;
+        RETURN;
+    END IF;
+
+    -- Build full CREATE MATERIALIZED VIEW statement
+    v_full_sql := format(
+        'CREATE MATERIALIZED VIEW %I.%I AS %s',
+        v_schema_name,
+        v_view_name,
+        v_body_sql
+    );
+
+    -- Drop old MV if it exists
+    -- EXECUTE format(
+    --    'DROP MATERIALIZED VIEW IF EXISTS %I.%I',
+    --    v_schema_name,
+    --    v_view_name
+    --);
+
+    -- Create the MV
+    EXECUTE v_full_sql;
+
+    RAISE NOTICE 'Materialized view %.% created successfully',
+        v_schema_name, v_view_name;
+END;
+$$;
+`;
+
+async function buildMaterializedViewWithTablesInfo(schemaName = pcSchema) {
+    //check if view is existing
+    if (!await isMaterializedViewExisting(schemaName)) {
+        //create view
+        console.debug('Creating materialized view for tables info in schema: ' + schemaName);
+        try {
+            await query(PCMA_VIEW_SQL);
+            console.debug('Materialized view for tables info in schema: ' + schemaName + ' has been created successfully');
+        } catch (err) {
+            console.error('Error during creating materialized view for tables info in schema: ' + schemaName, err);
+            throw err; // Re-throw error instead of swallowing it
+        }
+    } else {
+        console.debug('Materialized view for tables info in schema: ' + schemaName + ' is already existing');
+    }
+}
+
+async function isMaterializedViewExisting(schemaName = pcSchema) {
+    const isExisting =  await query('SELECT EXISTS (SELECT FROM pg_matviews WHERE schemaname = $1 AND matviewname = $2);', [ schemaName, PCMA_VIEW_NAME ]);
+    return isExisting?.rows?.[0]?.exists || false;
+}
+
+async function dropMaterializedView(schemaName = pcSchema) {
+    console.debug('Dropping materialized view for tables info in schema: ' + schemaName);
+    return query(`DROP MATERIALIZED VIEW IF EXISTS ${schemaName}.${PCMA_VIEW_NAME}`).then(() => {
+        console.debug('Materialized view for tables info in schema: ' + schemaName + ' has been dropped successfully');
+    }).catch(err => {
+        console.error('Error during dropping materialized view for tables info in schema: ' + schemaName, err);
+        throw err;
+    });
 }
 
 
@@ -249,5 +350,8 @@ module.exports = {
     hcWriterStream,
     query,
     isTableExisting,
-    getColumns
+    getColumns,
+    buildMaterializedViewWithTablesInfo,
+    isMaterializedViewExisting,
+    dropMaterializedView
 }

@@ -45,7 +45,20 @@ html
 				margin-bottom: 10px;
 			}
 
-			.permision-set-box {
+			.message {
+				background-color: #d4edda;
+				color: #155724;
+				padding: 15px 20px;
+				margin-bottom: 20px;
+				border-radius: 8px;
+				border: 1px solid #c3e6cb;
+				font-weight: 500;
+				box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+				width: 60%;
+				text-align: center;
+			}
+
+			.permission-set-box {
 				margin-top: 20px;
 				display: flex;
 				justify-content: center;
@@ -54,38 +67,97 @@ html
 			#selectAll {
 				cursor: pointer;
 			}
-	body
-		.error-message= errorMessage
-		form(action="/generatePackageXml" method="post" id="packageXmlForm") 
-			table(name="tables" id="tables")
-				thead
-					tr
-						th
-							input(type="checkbox", id="selectAll")
-						//- th Schema Name
-						th Table Name
-						th Number Of Columns
-						th Size
-				tbody
-					each val in tables
-						tr
-							td
-								input(type="checkbox"
-									,name= "selectedTables"
-									,value= val.tablename 
-									,checked= (selectedTables && selectedTables.includes(val.tablename) || null)
-									,class="table-checkbox"
-								)
 
-							//- td #{val.schemaname}
-							td #{val.tablename}
-							td #{val.number_of_columns}
-							td #{val.table_size}
-			.permision-set-box
-				input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
-				label(for="includePermissonSet") Include Permission Set 
+			.analyze-button {
+				margin-bottom: 20px;
+				padding: 10px 20px;
+				background-color: #2196F3;
+				color: white;
+				border: none;
+				cursor: pointer;
+			}
+
+			.analyze-button:hover {
+				background-color: #0b7dda;
+			}
+
+			.analyze-form {
+				width: 100%;
+				display: flex;
+				justify-content: center;
+			}
+
+			.refresh-button {
+				margin-bottom: 20px;
+				padding: 10px 20px;
+				background-color: #ff9800;
+				color: white;
+				border: none;
+				cursor: pointer;
+			}
+
+			.refresh-button:hover {
+				background-color: #e68900;
+			}
+
+			.refresh-form {
+				width: 100%;
+				display: flex;
+				justify-content: center;
+			}
+
+			.button-container {
+				width: 100%;
+				display: flex;
+				justify-content: center;
+				gap: 10px;
+				margin-bottom: 20px;
+			}
+	body
+		if message
+			.message= message
+			
+		.button-container
+			if showAnalyzeButton
+				form.analyze-form(action="/analyzePrivacyCenter" method="post" id="analyzeForm")
+					button.analyze-button(type="submit" form="analyzeForm") Analyze Privacy Center
+			
+			if showRefreshButton
+				form.refresh-form(action="/refreshMaterializedView" method="post" id="refreshForm")
+					button.refresh-button(type="submit" form="refreshForm") Refresh Analysis
+		
+		.error-message= errorMessage
+		if tables.length !== 0
+			form(action="/generatePackageXml" method="post" id="packageXmlForm") 
+				table(name="tables" id="tables")
+					thead
+						tr
+							th
+								input(type="checkbox", id="selectAll")
+							//- th Schema Name
+							th Table Name
+							th Number Of Columns
+							th Size
+					tbody
+						each val in tables
+							tr
+								td
+									input(type="checkbox"
+										,name= "selectedTables"
+										,value= val.tablename 
+										,checked= (selectedTables && selectedTables.includes(val.tablename) || null)
+										,class="table-checkbox"
+									)
+
+								//- td #{val.schemaname}
+								td #{val.tablename}
+								td #{val.number_of_columns}
+								td #{val.table_size}
+				.permission-set-box
+					input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
+					label(for="includePermissonSet") Include Permission Set 
 			//- Centering the button under the table
-		button(type="submit" form="packageXmlForm") Get package.xml
+			button(type="submit" form="packageXmlForm") Get package.xml
 
 		script.
 			document.addEventListener('DOMContentLoaded', function() {

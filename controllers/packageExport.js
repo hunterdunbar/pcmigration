@@ -1,16 +1,27 @@
 
 const express = require('express');
 const router = express.Router();
-const { validateSession } = require('./../services/security');
-const { getTablesInSchemas } = require('./../services/db');
-const { getMetadataJson, getPermissionSetJson, getPermissionSetName } = require('./../services/salesforce');
+const { 
+    getTablesInSchemas, 
+    buildMaterializedViewWithTablesInfo,
+    isMaterializedViewExisting,
+    dropMaterializedView
+} = require('./../services/db');
 
-const xmlConverter = require('xml-js');
-const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
+const {
+    getMetadataJson, 
+    getPermissionSetJson, 
+    getPermissionSetName,
+    generateCustomObjectFile,
+    generatePermissionSetFile,
+    generatePackageXmlFile
+} = require('./../services/salesforce');
 
 const { pcSchema } = require('../config/default')
 
 const JSZip = require('jszip');
+
+let viewCreationInProgress = false;
 
 async function renderPage(resp, selectedTables = null, errorMessage = null) {
 
@@ -22,13 +33,29 @@ async function renderPage(resp, selectedTables = null, errorMessage = null) {
         });
     }
 
+    const isViewExisting = await isMaterializedViewExisting();
+
     try {
-        let data = await getTablesInSchemas([ pcSchema ]);
-        return resp.render('packageExport', { 
-            tables : data?.[pcSchema] || [], 
-            selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
-            errorMessage 
-        });
+        if (isViewExisting) {
+            let data = await getTablesInSchemas([ pcSchema ]);
+            return resp.render('packageExport', { 
+                tables : data?.[pcSchema] || [], 
+                selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
+                errorMessage,
+                showRefreshButton : true
+            });
+        } else {
+            const message = viewCreationInProgress 
+                ? 'Analyze of Privacy Center has been started in background. You can continue your work when the process is complete. Refresh the page until the Analyse Privacy Center button disappears.'
+                : 'Please hit Analyze Privacy Center button to run the analysis. Refresh the page until this message disappears.'
+            return resp.render('packageExport', {
+                tables : [], 
+                selectedTables : [],
+                errorMessage,
+                message,
+                showAnalyzeButton : !viewCreationInProgress
+            });
+        }
     } catch (e) {
         console.error('error:', e);
         return resp.render('packageExport', { 
@@ -39,17 +66,15 @@ async function renderPage(resp, selectedTables = null, errorMessage = null) {
     }
 }
 
-router.get('/packageExport', validateSession(), async (req, resp) => {
+router.get('/packageExport', async (req, resp) => {
     return renderPage(resp)
 })
 
 router.get('/generatePackageXml', (req, resp) => {
-    resp.redirect('/packageExport')
+    return resp.redirect('/packageExport')
 })
 
-
-router.post('/generatePackageXml', validateSession(), async (req, resp) => {
-
+router.post('/generatePackageXml', async (req, resp) => {
     const { selectedTables, includePermissonSet } = req.body;
 
     if (!selectedTables?.length) {
@@ -110,64 +135,39 @@ router.post('/generatePackageXml', validateSession(), async (req, resp) => {
     }
 })
 
-function generateCustomObjectFile(metadataJson) {
-    return convertToXml({
-        "_declaration" : { 
-            "_attributes" : { "version" : "1.0" , "encoding":"utf-8" } 
-        },
-        CustomObject : {
-            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
-            ...metadataJson
-        }
-    })
-}
-
-function generatePermissionSetFile(metadataJson) {
-    return convertToXml({
-        "_declaration" : { 
-            "_attributes" : { "version" : "1.0" , "encoding":"utf-8" } 
-        },
-        PermissionSet : {
-            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
-            ...metadataJson
-        }
-    })
-}
+router.get('/analyzePrivacyCenter', (req, resp) => {
+    return resp.redirect('/packageExport');
+})
 
 
-function generatePackageXmlFile({ objectNames = [], permissionSets = [] }) {
-    const packageXmlJson = {
-        "_declaration" : { 
-            "_attributes" : { "version" : "1.0" , "encoding":"UTF-8" } 
-        },
-        Package : {
-            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
-            types : [        
-                { 
-                    members : objectNames,
-                    name : 'CustomObject'
-                }
-            ],
-            version : '55.0'
-        }
+router.post('/analyzePrivacyCenter', (req, resp) => {
+    //don't need to await result here
+    if (!viewCreationInProgress) {
+        viewCreationInProgress = true;
+        buildMaterializedViewWithTablesInfo()
+            .catch(err => {
+                console.error('Error during materialized view creation:', err);
+            }).finally(() => {
+                viewCreationInProgress = false;
+            });
+
     }
+    return resp.redirect('/packageExport');
+    
+})
 
-    if (permissionSets?.length) {
-        packageXmlJson.Package.types = [
-            ...packageXmlJson.Package.types,
-            {   
-                members : permissionSets,
-                name : 'PermissionSet'
-            }
-        ]
+router.get('/refreshMaterializedView', (req, resp) => {
+    return resp.redirect('/packageExport');
+})
+
+router.post('/refreshMaterializedView', async (req, resp) => {
+    try {
+        await dropMaterializedView();
+        return resp.redirect('/packageExport');
+    } catch (e) {
+        console.error('Error dropping materialized view:', e);
+        return renderPage(resp, null, e.message || e || 'Failed to refresh materialized view');
     }
-
-    return convertToXml(packageXmlJson)
-}
-
-
-function convertToXml(jsonObject) {
-    return xmlConverter.js2xml(jsonObject, xmlConverterOptions)
-}
+})
 
 module.exports = router

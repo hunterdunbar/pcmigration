@@ -4,6 +4,9 @@ const {
     migratedCustomTablePrefix
 } = require('./../config/default');
 
+const xmlConverter = require('xml-js');
+const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
+
 const { hashWithBase64 } = require('./../services/utils');
 
 const { getColumns } = require('./db');
@@ -178,11 +181,74 @@ function makeDescriptionJson(version, apiName) {
     });
 }
 
+function generateCustomObjectFile(metadataJson) {
+    return convertToXml({
+        "_declaration" : { 
+            "_attributes" : { "version" : "1.0" , "encoding":"utf-8" } 
+        },
+        CustomObject : {
+            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
+            ...metadataJson
+        }
+    })
+}
+
+function generatePermissionSetFile(metadataJson) {
+    return convertToXml({
+        "_declaration" : { 
+            "_attributes" : { "version" : "1.0" , "encoding":"utf-8" } 
+        },
+        PermissionSet : {
+            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
+            ...metadataJson
+        }
+    })
+}
+
+
+function generatePackageXmlFile({ objectNames = [], permissionSets = [] }) {
+    const packageXmlJson = {
+        "_declaration" : { 
+            "_attributes" : { "version" : "1.0" , "encoding":"UTF-8" } 
+        },
+        Package : {
+            "_attributes": { "xmlns" : "http://soap.sforce.com/2006/04/metadata" },
+            types : [        
+                { 
+                    members : objectNames,
+                    name : 'CustomObject'
+                }
+            ],
+            version : '55.0'
+        }
+    }
+
+    if (permissionSets?.length) {
+        packageXmlJson.Package.types = [
+            ...packageXmlJson.Package.types,
+            {   
+                members : permissionSets,
+                name : 'PermissionSet'
+            }
+        ]
+    }
+
+    return convertToXml(packageXmlJson)
+}
+
+
+function convertToXml(jsonObject) {
+    return xmlConverter.js2xml(jsonObject, xmlConverterOptions)
+}
+
 module.exports = {
     convertColumnNameToSFformat,
     getExternalIdFieldName,
     getMetadataJson,
     getPermissionSetJson,
     getPermissionSetName,
-    getMappedFieldName
+    getMappedFieldName,
+    generateCustomObjectFile,
+    generatePermissionSetFile,
+    generatePackageXmlFile
 }
