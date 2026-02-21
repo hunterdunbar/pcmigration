@@ -1,6 +1,9 @@
 require('dotenv').config();
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-const  { 
+const  {
     getTableMetadata,
     query,
     queryCursor,
@@ -17,7 +20,7 @@ const {
 const { getExternalIdFieldName, getMappedFieldName } = require('./services/salesforce')
 const { processInfoLogging } = require('./services/processInfo');
 
-const { 
+const {
     sourceTable,
     targetTable,
     hcSchema,
@@ -28,9 +31,6 @@ const {
 } = require('./config/default')
 
 const cluster = require('cluster');
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
 const MAX_QUERY_PARAMS = 60000;
 const MAX_GZIP_CURSOR_CHUNK_ROWS = 1000;
 const GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS = 10000;
@@ -40,12 +40,21 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = 2000;
 const PROC_SELF_CGROUP_PATH = '/proc/self/cgroup';
 const CGROUP_V2_BASE_PATH = '/sys/fs/cgroup';
 const CGROUP_V1_MEMORY_BASE_PATH = '/sys/fs/cgroup/memory';
-const MAX_GZIP_BATCH_BYTES = 200 * 1024 * 1024; // 200MB hard limit
+const MAX_GZIP_BATCH_BYTES = (() => {
+    const configuredMaxBatchBytes = Number(process.env.MAX_GZIP_BATCH_BYTES);
+    return Number.isFinite(configuredMaxBatchBytes) && configuredMaxBatchBytes > 0
+        ? Math.floor(configuredMaxBatchBytes)
+        : null; // no hard cap by default; bounded by available memory
+})();
 const MIN_GZIP_BATCH_BYTES = 8 * 1024 * 1024; // 8MB floor
 const DEFAULT_GZIP_BATCH_BYTES = 32 * 1024 * 1024; // safe fallback
 const GZIP_AVAILABLE_MEMORY_FRACTION = 0.35;
 const GZIP_MEMORY_PRESSURE_FRACTION = 0.85;
 const GZIP_MEMORY_RECHECK_EVERY_INSERT_CHUNKS = 5;
+const GZIP_ROW_MEMORY_OVERHEAD_FACTOR = 2;
+const DEFAULT_GZIP_ROW_BYTES_ESTIMATE = 1024 * 1024;
+const CGROUP_UNLIMITED_THRESHOLD_BYTES = 1024 * 1024 * 1024 * 1024;
+const HEROKU_FALLBACK_MEMORY_LIMIT_BYTES = 512 * 1024 * 1024;
 
 function readTextFileSafe(filePath) {
     try {
@@ -61,7 +70,10 @@ function parseMemoryValue(value) {
     }
 
     const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= CGROUP_UNLIMITED_THRESHOLD_BYTES) {
+        return null;
+    }
+    return parsed;
 }
 
 function parseCgroupPaths() {
@@ -131,9 +143,15 @@ function getMemorySnapshot() {
         };
     }
 
+    const isHerokuDyno = Boolean(process.env.DYNO);
+    const osTotalMemory = Number(os.totalmem()) || null;
+    const fallbackLimitBytes = isHerokuDyno
+        ? Math.min(osTotalMemory || HEROKU_FALLBACK_MEMORY_LIMIT_BYTES, HEROKU_FALLBACK_MEMORY_LIMIT_BYTES)
+        : osTotalMemory;
+
     return {
         source : 'os-totalmem',
-        limitBytes : Number(os.totalmem()) || null,
+        limitBytes : fallbackLimitBytes,
         usageBytes : rssBytes,
         rssBytes
     };
@@ -151,7 +169,10 @@ function calculateSafeBatchBytes(memorySnapshot) {
         const availableBytes = Math.max(1, limitBytes - usageBytes);
         const perWorkerAvailableBytes = Math.max(1, Math.floor(availableBytes / workerCount));
         const preferredBytes = Math.floor(perWorkerAvailableBytes * GZIP_AVAILABLE_MEMORY_FRACTION);
-        const maxAllowedBytes = Math.min(MAX_GZIP_BATCH_BYTES, perWorkerAvailableBytes);
+        const hardLimitBytes = Number.isFinite(MAX_GZIP_BATCH_BYTES) && MAX_GZIP_BATCH_BYTES > 0
+            ? MAX_GZIP_BATCH_BYTES
+            : perWorkerAvailableBytes;
+        const maxAllowedBytes = Math.min(hardLimitBytes, perWorkerAvailableBytes);
         const minAllowedBytes = Math.min(MIN_GZIP_BATCH_BYTES, maxAllowedBytes);
         const safeBytes = Math.max(minAllowedBytes, Math.min(preferredBytes, maxAllowedBytes));
         return Math.max(1, safeBytes);
@@ -182,6 +203,20 @@ function estimateValueBytes(value) {
         return value.length;
     }
     return Buffer.byteLength(String(value), 'utf8');
+}
+
+function calculateSafeCursorChunkRows(rowsPerInsertChunk, dynamicBatchBytes, estimatedRowBytes) {
+    const normalizedRowEstimate = Math.max(1, Number(estimatedRowBytes) || DEFAULT_GZIP_ROW_BYTES_ESTIMATE);
+    const safeRowBytes = Math.max(
+        DEFAULT_GZIP_ROW_BYTES_ESTIMATE,
+        Math.floor(normalizedRowEstimate * GZIP_ROW_MEMORY_OVERHEAD_FACTOR)
+    );
+    const memoryBoundRows = Math.max(1, Math.floor(dynamicBatchBytes / safeRowBytes));
+
+    return Math.max(
+        1,
+        Math.min(rowsPerInsertChunk, MAX_GZIP_CURSOR_CHUNK_ROWS, memoryBoundRows)
+    );
 }
 
 (async () => {
@@ -408,7 +443,12 @@ function estimateValueBytes(value) {
                 const rowsPerInsertChunk = Math.max(1, Math.floor(MAX_QUERY_PARAMS / columnsPerRow));
                 let memorySnapshot = getMemorySnapshot();
                 let dynamicBatchBytes = calculateSafeBatchBytes(memorySnapshot);
-                const cursorChunkSize = Math.max(1, Math.min(rowsPerInsertChunk, MAX_GZIP_CURSOR_CHUNK_ROWS));
+                let estimatedRowBytes = DEFAULT_GZIP_ROW_BYTES_ESTIMATE;
+                let cursorChunkSize = calculateSafeCursorChunkRows(
+                    rowsPerInsertChunk,
+                    dynamicBatchBytes,
+                    estimatedRowBytes
+                );
                 const sourceSelectQuery = `select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} where id between ${currentJob.idFrom} and ${currentJob.idTo} order by id`;
                 const gzipProgress = {
                     startedAt : Date.now(),
@@ -477,7 +517,22 @@ function estimateValueBytes(value) {
                     }
                 };
 
-                await queryCursor(sourceSelectQuery, [], { chunkSize : cursorChunkSize }, async (sourceRows) => {
+                const getDynamicCursorChunkSize = () => {
+                    const snapshot = getMemorySnapshot();
+                    const safeBatchBytes = calculateSafeBatchBytes(snapshot);
+                    const adjustedBatchBytes = isMemoryPressureHigh(snapshot)
+                        ? Math.max(MIN_GZIP_BATCH_BYTES, Math.floor(safeBatchBytes * 0.5))
+                        : safeBatchBytes;
+                    const nextCursorChunkSize = calculateSafeCursorChunkRows(
+                        rowsPerInsertChunk,
+                        adjustedBatchBytes,
+                        estimatedRowBytes
+                    );
+                    cursorChunkSize = nextCursorChunkSize;
+                    return nextCursorChunkSize;
+                };
+
+                await queryCursor(sourceSelectQuery, [], { chunkSize : cursorChunkSize, getChunkSize : getDynamicCursorChunkSize }, async (sourceRows) => {
                     if (!sourceRows?.length) {
                         return;
                     }
@@ -498,12 +553,14 @@ function estimateValueBytes(value) {
                         const row = sourceRows[rowIndex];
                         const transformedRow = [];
                         let rowBytes = 0;
+                        let sourceRowBytes = 0;
 
                         for (let colIndex = 0; colIndex < currentJob.sourceColumnNames.length; colIndex++) {
                             const sourceColumnName = currentJob.sourceColumnNames[colIndex];
                             const value = row[sourceColumnName] !== undefined
                                 ? row[sourceColumnName]
                                 : row[String(sourceColumnName).toLowerCase()];
+                            sourceRowBytes += estimateValueBytes(value);
                             if (String(sourceColumnName).toLowerCase() === GZIP_COMPRESSED_COLUMN
                                 && value !== null
                                 && value !== undefined) {
@@ -516,6 +573,11 @@ function estimateValueBytes(value) {
                         }
 
                         rowBytes += (columnsPerRow * 8) + 64;
+                        const observedRowBytes = Math.max(sourceRowBytes, rowBytes);
+                        estimatedRowBytes = Math.max(
+                            1,
+                            Math.floor((estimatedRowBytes * 0.85) + (observedRowBytes * 0.15))
+                        );
 
                         if (isMemoryPressureHigh(memorySnapshot) && pendingRows.length) {
                             await flushPendingRows();
