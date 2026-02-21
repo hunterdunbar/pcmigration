@@ -86,13 +86,45 @@ html
 				display: flex;
 				justify-content: center;
 			}
+
+			.refresh-button {
+				margin-bottom: 20px;
+				padding: 10px 20px;
+				background-color: #ff9800;
+				color: white;
+				border: none;
+				cursor: pointer;
+			}
+
+			.refresh-button:hover {
+				background-color: #e68900;
+			}
+
+			.refresh-form {
+				width: 100%;
+				display: flex;
+				justify-content: center;
+			}
+
+			.button-container {
+				width: 100%;
+				display: flex;
+				justify-content: center;
+				gap: 10px;
+				margin-bottom: 20px;
+			}
 	body
 		if message
 			.message= message
 			
-		if showAnalyzeButton
-			form.analyze-form(action="/analyzePrivacyCenter" method="post" id="analyzeForm")
-				button.analyze-button(type="submit" form="analyzeForm") Analyze Privacy Center
+		.button-container
+			if showAnalyzeButton
+				form.analyze-form(action="/analyzePrivacyCenter" method="post" id="analyzeForm")
+					button.analyze-button(type="submit" form="analyzeForm") Analyze Privacy Center
+			
+			if showRefreshButton
+				form.refresh-form(action="/refreshMaterializedView" method="post" id="refreshForm")
+					button.refresh-button(type="submit" form="refreshForm") Refresh Analysis
 		
 		.error-message= errorMessage
 		if tables.length !== 0

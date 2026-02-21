@@ -110,10 +110,12 @@ async function queryCursor(sql, params, config = {}, callback) {
 class QueryStream extends Readable {
 
     cursor;
+    client;
 
-    constructor(cursor, chunkSize) {
+    constructor(cursor, client, chunkSize) {
         super({ highWaterMark: chunkSize, objectMode : true });
         this.cursor = cursor;
+        this.client = client;
     }
 
     _read(size) {
@@ -130,7 +132,10 @@ class QueryStream extends Readable {
         if (err) {
             console.error('[ERROR]: QueryStream: ', err);
         }
-        this.cursor.close(callback)
+        this.cursor.close(() => {
+            this.client.release();
+            callback();
+        });
     }
 
 }
@@ -178,7 +183,7 @@ class HerokuSchemaWriter extends Writable {
 async function queryStream(sql, chunkSize) {
     const client = await pool.connect();
     const cursor = client.query(new Cursor(sql));
-    return new QueryStream(cursor, chunkSize);
+    return new QueryStream(cursor, client, chunkSize);
 }
 
 async function hcWriterStream(tableName) {
@@ -219,8 +224,9 @@ async function getColumns(schemaName, tableName) {
         const result = await query(queryToGetMaxLength);
         if (result.rows?.length) {
             result.rows.forEach(row => {
-                if (columns[row.column_name] && row.column_size) {
-                    columns[row.column_name].length = row.column_size;
+                const column = columns.find(col => col.columnName === row.column_name);
+                if (column && row.column_size) {
+                    column.length = row.column_size;
                 }
             })
         }
@@ -306,11 +312,13 @@ async function buildMaterializedViewWithTablesInfo(schemaName = pcSchema) {
     if (!await isMaterializedViewExisting(schemaName)) {
         //create view
         console.debug('Creating materialized view for tables info in schema: ' + schemaName);
-        return query(PCMA_VIEW_SQL).then(() => {
+        try {
+            await query(PCMA_VIEW_SQL);
             console.debug('Materialized view for tables info in schema: ' + schemaName + ' has been created successfully');
-        }).catch(err => {
+        } catch (err) {
             console.error('Error during creating materialized view for tables info in schema: ' + schemaName, err);
-        });
+            throw err; // Re-throw error instead of swallowing it
+        }
     } else {
         console.debug('Materialized view for tables info in schema: ' + schemaName + ' is already existing');
     }
@@ -319,6 +327,16 @@ async function buildMaterializedViewWithTablesInfo(schemaName = pcSchema) {
 async function isMaterializedViewExisting(schemaName = pcSchema) {
     const isExisting =  await query('SELECT EXISTS (SELECT FROM pg_matviews WHERE schemaname = $1 AND matviewname = $2);', [ schemaName, PCMA_VIEW_NAME ]);
     return isExisting?.rows?.[0]?.exists || false;
+}
+
+async function dropMaterializedView(schemaName = pcSchema) {
+    console.debug('Dropping materialized view for tables info in schema: ' + schemaName);
+    return query(`DROP MATERIALIZED VIEW IF EXISTS ${schemaName}.${PCMA_VIEW_NAME}`).then(() => {
+        console.debug('Materialized view for tables info in schema: ' + schemaName + ' has been dropped successfully');
+    }).catch(err => {
+        console.error('Error during dropping materialized view for tables info in schema: ' + schemaName, err);
+        throw err;
+    });
 }
 
 
@@ -334,5 +352,6 @@ module.exports = {
     isTableExisting,
     getColumns,
     buildMaterializedViewWithTablesInfo,
-    isMaterializedViewExisting
+    isMaterializedViewExisting,
+    dropMaterializedView
 }

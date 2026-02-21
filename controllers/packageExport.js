@@ -4,7 +4,8 @@ const router = express.Router();
 const { 
     getTablesInSchemas, 
     buildMaterializedViewWithTablesInfo,
-    isMaterializedViewExisting
+    isMaterializedViewExisting,
+    dropMaterializedView
 } = require('./../services/db');
 
 const {
@@ -40,7 +41,8 @@ async function renderPage(resp, selectedTables = null, errorMessage = null) {
             return resp.render('packageExport', { 
                 tables : data?.[pcSchema] || [], 
                 selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
-                errorMessage
+                errorMessage,
+                showRefreshButton : true
             });
         } else {
             const message = viewCreationInProgress 
@@ -152,6 +154,20 @@ router.post('/analyzePrivacyCenter', (req, resp) => {
     }
     return resp.redirect('/packageExport');
     
+})
+
+router.get('/refreshMaterializedView', (req, resp) => {
+    return resp.redirect('/packageExport');
+})
+
+router.post('/refreshMaterializedView', async (req, resp) => {
+    try {
+        await dropMaterializedView();
+        return resp.redirect('/packageExport');
+    } catch (e) {
+        console.error('Error dropping materialized view:', e);
+        return renderPage(resp, null, e.message || e || 'Failed to refresh materialized view');
+    }
 })
 
 module.exports = router
