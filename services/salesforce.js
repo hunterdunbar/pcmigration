@@ -10,8 +10,10 @@ const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
 const { hashWithBase64 } = require('./../services/utils');
 
 const { getColumns } = require('./db');
+const { isCompressedField } = require('./migrationCompression');
 
 const version = 1;
+const COMPRESSED_FLAG_COLUMN = 'htmlbody';
 
 function replaceDoubleUnderscore(name) {
     return name.replace(/(.)__(.)/gi, '$1_$2').replace(/_c$/i, '__c');
@@ -108,9 +110,13 @@ async function getMetadataJson(schemaName, tableName) {
         fields : columns.map((column, i) => {
             const { type, length } = getFieldMetadata(column);
             const isSfId = column.columnName === 'sfid';
+            const normalizedColumnName = String(column.columnName || '').toLowerCase();
+            const compressedFlag = normalizedColumnName === COMPRESSED_FLAG_COLUMN
+                ? (isCompressedField(tableName, column.columnName) ? 1 : 0)
+                : undefined;
             const sfField = {
                 fullName : getMappedFieldName(column.columnName, i),
-                description : makeDescriptionJson(version, column.columnName),
+                description : makeDescriptionJson(version, column.columnName, compressedFlag),
                 label : column.columnName.slice(0, 40), //max label length is 40
                 type,
                 length,
@@ -174,11 +180,17 @@ function getMappedFieldName(name, index) {
     return `${MAPPED_FIELD_NAME}_${index}__c`; //mapped field names to avoid issues with length or duplicates
 }
 
-function makeDescriptionJson(version, apiName) {
-    return JSON.stringify({
+function makeDescriptionJson(version, apiName, isCompressed) {
+    const description = {
         version,
         apiName : apiName === 'sfid' ? 'Id' : apiName
-    });
+    };
+
+    if (isCompressed === 0 || isCompressed === 1) {
+        description.isCompressed = isCompressed;
+    }
+
+    return JSON.stringify(description);
 }
 
 function generateCustomObjectFile(metadataJson) {
