@@ -30,8 +30,10 @@ const {
 const cluster = require('cluster');
 const MAX_QUERY_PARAMS = 60000;
 const MAX_GZIP_CURSOR_CHUNK_ROWS = 1000;
-const GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS = 20;
+const GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS = 10000;
 const GZIP_COMPRESSED_COLUMN = 'htmlbody';
+const ENABLE_GZIP_PROGRESS_LOG = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || false;
+const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 2000;
 
 (async () => {
 
@@ -117,11 +119,36 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
         const migrationStartedAt = Date.now();
         let isFinalProcessInfoLogged = false;
         let jobMonitor = null;
+        let lastProcessInfoLogAt = 0;
+        let lastProcessInfoSnapshot = null;
 
         const refreshProcessInfo = () => {
             processInfo.countOfCompletedJobs = queue.filter(j => j.status === JOB_STATUS.Completed)?.length;
             processInfo.countOfJobsWithError = queue.filter(j => j.status === JOB_STATUS.Error)?.length;
             processInfo.countOfRemainingJobs = processInfo.countOfJobs - processInfo.countOfCompletedJobs - processInfo.countOfJobsWithError;
+        };
+
+        const getProcessInfoSnapshot = () => ({
+            completed : processInfo.countOfCompletedJobs || 0,
+            error : processInfo.countOfJobsWithError || 0,
+            remaining : processInfo.countOfRemainingJobs || 0
+        });
+
+        const maybeLogProcessInfo = (force = false) => {
+            refreshProcessInfo();
+            const snapshot = getProcessInfoSnapshot();
+            const now = Date.now();
+            const isChanged = !lastProcessInfoSnapshot
+                || snapshot.completed !== lastProcessInfoSnapshot.completed
+                || snapshot.error !== lastProcessInfoSnapshot.error
+                || snapshot.remaining !== lastProcessInfoSnapshot.remaining;
+            const isIntervalElapsed = (now - lastProcessInfoLogAt) >= PROCESS_INFO_LOG_MIN_INTERVAL_MS;
+
+            if (force || (isChanged && isIntervalElapsed)) {
+                processInfoLogging(processInfo);
+                lastProcessInfoLogAt = now;
+                lastProcessInfoSnapshot = snapshot;
+            }
         };
 
         const tryFinalizeProcessInfo = (trigger) => {
@@ -131,7 +158,7 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
                 if (jobMonitor) {
                     clearInterval(jobMonitor);
                 }
-                processInfoLogging(processInfo);
+                maybeLogProcessInfo(true);
                 const elapsedSeconds = ((Date.now() - migrationStartedAt) / 1000).toFixed(2);
                 console.info(`[MASTER] Migration finished in ${elapsedSeconds}s (trigger: ${trigger})`);
             }
@@ -154,6 +181,7 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
         cluster.on('message', (worker, message) => {
             const msg = JSON.parse(message);
             queue[msg.index].status = msg.status;
+            maybeLogProcessInfo(false);
             tryFinalizeProcessInfo('message');
         });
 
@@ -180,8 +208,7 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
         });
 
         jobMonitor = setInterval(() => {
-            refreshProcessInfo();
-            processInfoLogging(processInfo);
+            maybeLogProcessInfo(false);
             tryFinalizeProcessInfo('timer');
         }, 10000) //
 
@@ -219,10 +246,12 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
                     cursorChunks : 0
                 };
 
-                console.info(
-                    `[GZIP][worker ${process.pid}] job=${currentJob.index} range=${currentJob.idFrom}-${currentJob.idTo} ` +
-                    `cursorChunkSize=${cursorChunkSize} insertChunkSize=${rowsPerInsertChunk}`
-                );
+                if (ENABLE_GZIP_PROGRESS_LOG) {
+                    console.info(
+                        `[GZIP][worker ${process.pid}] job=${currentJob.index} range=${currentJob.idFrom}-${currentJob.idTo} ` +
+                        `cursorChunkSize=${cursorChunkSize} insertChunkSize=${rowsPerInsertChunk}`
+                    );
+                }
 
                 await queryCursor(sourceSelectQuery, [], { chunkSize : cursorChunkSize }, async (sourceRows) => {
                     if (!sourceRows?.length) {
@@ -260,7 +289,8 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
                         gzipProgress.rowsInserted += rowChunk.length;
                         gzipProgress.insertChunks++;
 
-                        if (gzipProgress.insertChunks % GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS === 0) {
+                        if (ENABLE_GZIP_PROGRESS_LOG
+                            && gzipProgress.insertChunks % GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS === 0) {
                             const elapsedSeconds = ((Date.now() - gzipProgress.startedAt) / 1000).toFixed(1);
                             console.info(
                                 `[GZIP][worker ${process.pid}] job=${currentJob.index} progress ` +
@@ -272,13 +302,15 @@ const GZIP_COMPRESSED_COLUMN = 'htmlbody';
                     }
                 });
 
-                const elapsedSeconds = ((Date.now() - gzipProgress.startedAt) / 1000).toFixed(1);
-                console.info(
-                    `[GZIP][worker ${process.pid}] job=${currentJob.index} completed ` +
-                    `cursorChunks=${gzipProgress.cursorChunks} insertChunks=${gzipProgress.insertChunks} ` +
-                    `sourceRowsRead=${gzipProgress.sourceRowsRead} rowsInserted=${gzipProgress.rowsInserted} ` +
-                    `compressedValues=${gzipProgress.compressedValues} elapsed=${elapsedSeconds}s`
-                );
+                if (ENABLE_GZIP_PROGRESS_LOG) {
+                    const elapsedSeconds = ((Date.now() - gzipProgress.startedAt) / 1000).toFixed(1);
+                    console.info(
+                        `[GZIP][worker ${process.pid}] job=${currentJob.index} completed ` +
+                        `cursorChunks=${gzipProgress.cursorChunks} insertChunks=${gzipProgress.insertChunks} ` +
+                        `sourceRowsRead=${gzipProgress.sourceRowsRead} rowsInserted=${gzipProgress.rowsInserted} ` +
+                        `compressedValues=${gzipProgress.compressedValues} elapsed=${elapsedSeconds}s`
+                    );
+                }
             }
             msg.status = JOB_STATUS.Completed;
         } catch (e) {
