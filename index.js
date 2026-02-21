@@ -33,7 +33,7 @@ const MAX_GZIP_CURSOR_CHUNK_ROWS = 1000;
 const GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS = 10000;
 const GZIP_COMPRESSED_COLUMN = 'htmlbody';
 const ENABLE_GZIP_PROGRESS_LOG = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || false;
-const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 2000;
+const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 10000;
 
 (async () => {
 
@@ -120,6 +120,7 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
         console.log(`Master process ${process.pid} is running`);
         const migrationStartedAt = Date.now();
         let isFinalProcessInfoLogged = false;
+        let isQueueCompletionLogged = false;
         let jobMonitor = null;
         let lastProcessInfoLogAt = 0;
         let lastProcessInfoSnapshot = null;
@@ -211,12 +212,15 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                         JOB : JSON.stringify(nextJob)
                     });
                 } else {
-                    const jobsWithError = queue.filter(j => j.status === JOB_STATUS.Error);
-                    const completedJobs = queue.filter(j => j.status === JOB_STATUS.Completed);
-                    
-                    console.debug('All jobs has been processed: ')
-                    console.debug('Jobs with Error: ' + jobsWithError.length);
-                    console.debug('Complted Jobs: ' + completedJobs.length);
+                    if (!isQueueCompletionLogged) {
+                        isQueueCompletionLogged = true;
+                        const jobsWithError = queue.filter(j => j.status === JOB_STATUS.Error);
+                        const completedJobs = queue.filter(j => j.status === JOB_STATUS.Completed);
+
+                        console.debug('All jobs has been processed: ')
+                        console.debug('Jobs with Error: ' + jobsWithError.length);
+                        console.debug('Complted Jobs: ' + completedJobs.length);
+                    }
                 }
             }
             tryFinalizeProcessInfo('exit');
