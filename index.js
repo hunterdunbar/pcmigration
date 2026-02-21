@@ -71,6 +71,7 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
         //get count of objects
         const countOfRowsInTargetTableRes = await query(`select count(*) from ${hcSchema}.${targetTable.toLowerCase()}`);
         const countOfRowsInTargetTable = countOfRowsInTargetTableRes?.rows?.[0]?.count;
+        const initialMigratedRecords = Number(countOfRowsInTargetTable) || 0;
 
         //get count of objects
         const countOfRowsRes = await query(`select count(*) from ${pcSchema}.${sourceTable.toLowerCase()}`);
@@ -96,6 +97,7 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                 sourceColumnNames,
                 targetColumnNames,
                 shouldCompress,
+                insertedCount : 0,
                 idFrom,
                 idTo
                 // query : 'test'
@@ -106,7 +108,7 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
         processInfo.countOfRecordsToMigrate = countOfRows;
         processInfo.countOfThreads = numberOfThreads;
         processInfo.countOfJobs = countOfJobs;
-        processInfo.countOfMigratedRecords = countOfRowsInTargetTable;
+        processInfo.countOfMigratedRecords = initialMigratedRecords;
 
 
         if (queue.length === 0) {
@@ -126,6 +128,8 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
             processInfo.countOfCompletedJobs = queue.filter(j => j.status === JOB_STATUS.Completed)?.length;
             processInfo.countOfJobsWithError = queue.filter(j => j.status === JOB_STATUS.Error)?.length;
             processInfo.countOfRemainingJobs = processInfo.countOfJobs - processInfo.countOfCompletedJobs - processInfo.countOfJobsWithError;
+            const insertedByWorkers = queue.reduce((sum, job) => sum + (Number(job.insertedCount) || 0), 0);
+            processInfo.countOfMigratedRecords = initialMigratedRecords + insertedByWorkers;
         };
 
         const getProcessInfoSnapshot = () => ({
@@ -180,7 +184,18 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
 
         cluster.on('message', (worker, message) => {
             const msg = JSON.parse(message);
-            queue[msg.index].status = msg.status;
+            const job = queue[msg.index];
+            if (job) {
+                if (msg.status) {
+                    job.status = msg.status;
+                }
+                if (msg.insertedCount !== undefined && msg.insertedCount !== null) {
+                    const insertedCount = Number(msg.insertedCount);
+                    if (Number.isFinite(insertedCount)) {
+                        job.insertedCount = insertedCount;
+                    }
+                }
+            }
             maybeLogProcessInfo(false);
             tryFinalizeProcessInfo('message');
         });
@@ -214,9 +229,11 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
 
     } else {
         const currentJob = JSON.parse(process.env.JOB);
+        let insertedCount = 0;
         const msg = {
             index : currentJob.index,
-            status : JOB_STATUS.Processing
+            status : JOB_STATUS.Processing,
+            insertedCount
         }
 
         process.send(JSON.stringify(msg));
@@ -227,7 +244,8 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
         let critialError = false;
         try {
             if (!currentJob.shouldCompress) {
-                await query(queryString);
+                const queryResult = await query(queryString);
+                insertedCount = Number(queryResult?.rowCount) || 0;
             } else {
                 const columnsPerRow = currentJob.targetColumnNames.length;
                 if (!columnsPerRow) {
@@ -285,7 +303,8 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                         }).join(',');
 
                         const insertQuery = `insert into ${hcSchema}.${targetTable.toLowerCase()}(${currentJob.targetColumns}) values ${placeholders} ON CONFLICT (${externalId}) DO NOTHING`;
-                        await query(insertQuery, values);
+                        const insertResult = await query(insertQuery, values);
+                        insertedCount += Number(insertResult?.rowCount) || 0;
                         gzipProgress.rowsInserted += rowChunk.length;
                         gzipProgress.insertChunks++;
 
@@ -312,9 +331,11 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                     );
                 }
             }
+            msg.insertedCount = insertedCount;
             msg.status = JOB_STATUS.Completed;
         } catch (e) {
             console.error('ERROR: ' + process.pid, { e, currentJob, queryString });
+            msg.insertedCount = insertedCount;
             msg.status = JOB_STATUS.Error;
             critialError = true;
         }
