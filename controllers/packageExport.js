@@ -32,7 +32,7 @@ const PCMA_VIEW_NAME = 'pcma_tables_info_mv';
 const MEMORY_UNLIMITED_THRESHOLD_BYTES = 1024 * 1024 * 1024 * 1024;
 const BULK_MEMORY_FRACTION = 0.75;
 const GZIP_MEMORY_OVERHEAD_FACTOR = 1.5;
-const MEMORY_PER_THREAD_MB = 512;
+const MAXIMUM_THREAD_COUNT = 4;
 
 function normalizeSelectedTables(selectedTables) {
     if (Array.isArray(selectedTables)) {
@@ -102,28 +102,26 @@ async function getEmailMessageRecommendation(tables = []) {
     const memoryLimitMb = memoryLimitBytes ? Math.round(memoryLimitBytes / (1024 * 1024)) : null;
     const currentThreadCount = Math.max(1, Number(numberOfThreads) || 1);
     const currentBulkLimit = Math.max(1, Number(bulkLimit) || 1);
-    const suggestedThreadCount = memoryLimitMb
-        ? clamp(Math.floor(memoryLimitMb / MEMORY_PER_THREAD_MB), 1, 8)
-        : currentThreadCount;
+    const maximumThreadCount = MAXIMUM_THREAD_COUNT;
 
     const effectiveMemoryBytes = memoryLimitBytes || (1024 * 1024 * 1024);
-    const perWorkerBudgetBytes = Math.max(1, Math.floor((effectiveMemoryBytes * BULK_MEMORY_FRACTION) / suggestedThreadCount));
+    const perWorkerBudgetBytes = Math.max(1, Math.floor((effectiveMemoryBytes * BULK_MEMORY_FRACTION) / maximumThreadCount));
     const estimatedMemoryPerRowBytes = Math.max(1024, Math.floor(maxHtmlBodyLength * GZIP_MEMORY_OVERHEAD_FACTOR));
     const rawRecommendedBulkLimit = clamp(
         Math.floor(perWorkerBudgetBytes / estimatedMemoryPerRowBytes),
         64,
         5000
     );
-    const recommendedBulkLimit = clamp(roundToStep(rawRecommendedBulkLimit, 10), 60, 5000);
+    const maximumBulkLimit = clamp(roundToStep(rawRecommendedBulkLimit, 10), 60, 5000);
 
     return {
         tableName : EMAILMESSAGE_TABLE,
         maxHtmlBodyLength,
         maxHtmlBodyLengthKb : Math.max(1, Math.round(maxHtmlBodyLength / 1024)),
         memoryLimitMb,
-        recommendedBulkLimit,
+        maximumBulkLimit,
         currentThreadCount,
-        suggestedThreadCount,
+        maximumThreadCount,
         currentBulkLimit
     };
 }
