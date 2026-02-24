@@ -1,11 +1,14 @@
 
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const os = require('os');
 const { 
     getTablesInSchemas, 
     buildMaterializedViewWithTablesInfo,
     isMaterializedViewExisting,
-    dropMaterializedView
+    dropMaterializedView,
+    query
 } = require('./../services/db');
 
 const {
@@ -17,13 +20,113 @@ const {
     generatePackageXmlFile
 } = require('./../services/salesforce');
 
-const { pcSchema } = require('../config/default')
+const { pcSchema, numberOfThreads } = require('../config/default')
 
 const JSZip = require('jszip');
 
 let viewCreationInProgress = false;
 
+const EMAILMESSAGE_TABLE = 'emailmessage';
+const HTMLBODY_COLUMN = 'htmlbody';
+const PCMA_VIEW_NAME = 'pcma_tables_info_mv';
+const MAX_QUERY_PARAMS = 60000;
+const MEMORY_UNLIMITED_THRESHOLD_BYTES = 1024 * 1024 * 1024 * 1024;
+
+function normalizeSelectedTables(selectedTables) {
+    if (Array.isArray(selectedTables)) {
+        return selectedTables;
+    }
+    if (selectedTables === null || selectedTables === undefined || selectedTables === '') {
+        return [];
+    }
+    return [ selectedTables ];
+}
+
+function parseMemoryLimitBytes(value) {
+    const parsed = Number(String(value || '').trim());
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= MEMORY_UNLIMITED_THRESHOLD_BYTES) {
+        return null;
+    }
+    return Math.floor(parsed);
+}
+
+function readTextFileSafe(filePath) {
+    try {
+        return fs.readFileSync(filePath, 'utf8').trim();
+    } catch (e) {
+        return null;
+    }
+}
+
+function getRuntimeMemoryLimitBytes() {
+    const cgroupV2Limit = parseMemoryLimitBytes(readTextFileSafe('/sys/fs/cgroup/memory.max'));
+    if (cgroupV2Limit) {
+        return cgroupV2Limit;
+    }
+
+    const cgroupV1Limit = parseMemoryLimitBytes(readTextFileSafe('/sys/fs/cgroup/memory/memory.limit_in_bytes'));
+    if (cgroupV1Limit) {
+        return cgroupV1Limit;
+    }
+
+    const total = Number(os.totalmem());
+    return Number.isFinite(total) && total > 0 ? total : null;
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+async function getEmailMessageRecommendation(tables = []) {
+    const emailTableInfo = tables.find((table) => String(table?.tablename || '').toLowerCase() === EMAILMESSAGE_TABLE);
+    if (!emailTableInfo) {
+        return null;
+    }
+
+    const sourceColumnsCount = Math.max(1, Number(emailTableInfo.number_of_columns) || 1);
+    const maxLengthRes = await query(
+        `select column_size::bigint as max_length
+         from ${pcSchema}.${PCMA_VIEW_NAME}
+         where table_name = $1 and column_name = $2
+         limit 1`,
+        [EMAILMESSAGE_TABLE, HTMLBODY_COLUMN]
+    );
+    const maxHtmlBodyLength = Math.max(1, Number(maxLengthRes?.rows?.[0]?.max_length) || 1);
+
+    const memoryLimitBytes = getRuntimeMemoryLimitBytes();
+    const memoryLimitMb = memoryLimitBytes ? Math.round(memoryLimitBytes / (1024 * 1024)) : null;
+
+    // gzip(base64) payload estimate for htmlbody + small fixed overhead for other columns.
+    const estimatedHtmlPayloadBytes = Math.max(1024, Math.ceil(maxHtmlBodyLength * 0.6));
+    const estimatedRowBytes = estimatedHtmlPayloadBytes + (sourceColumnsCount * 256);
+
+    const configuredThreads = Math.max(1, Number(numberOfThreads) || 1);
+    const rowsByParams = Math.max(1, Math.floor(MAX_QUERY_PARAMS / sourceColumnsCount));
+
+    let rowsByMemory = rowsByParams;
+    if (memoryLimitBytes) {
+        const perWorkerBudgetBytes = Math.max(1, Math.floor((memoryLimitBytes * 0.35) / configuredThreads));
+        rowsByMemory = Math.max(1, Math.floor(perWorkerBudgetBytes / estimatedRowBytes));
+    }
+
+    const recommendedInsertChunk = Math.max(1, Math.min(rowsByParams, rowsByMemory));
+    const recommendedBulkLimit = clamp(recommendedInsertChunk * 8, 1000, 50000);
+
+    return {
+        tableName : EMAILMESSAGE_TABLE,
+        maxHtmlBodyLength,
+        memoryLimitMb,
+        sourceColumnsCount,
+        rowsByParams,
+        rowsByMemory,
+        recommendedInsertChunk,
+        recommendedBulkLimit,
+        configuredThreads
+    };
+}
+
 async function renderPage(resp, selectedTables = null, errorMessage = null) {
+    const normalizedSelectedTables = normalizeSelectedTables(selectedTables);
 
     if (!pcSchema) {
         return resp.render('packageExport', { 
@@ -38,9 +141,12 @@ async function renderPage(resp, selectedTables = null, errorMessage = null) {
     try {
         if (isViewExisting) {
             let data = await getTablesInSchemas([ pcSchema ]);
+            const tables = data?.[pcSchema] || [];
+            const emailMessageRecommendation = await getEmailMessageRecommendation(tables);
             return resp.render('packageExport', { 
-                tables : data?.[pcSchema] || [], 
-                selectedTables : Array.isArray(selectedTables) ? selectedTables : [ selectedTables ],
+                tables, 
+                selectedTables : normalizedSelectedTables,
+                emailMessageRecommendation,
                 errorMessage,
                 showRefreshButton : true
             });
@@ -51,6 +157,7 @@ async function renderPage(resp, selectedTables = null, errorMessage = null) {
             return resp.render('packageExport', {
                 tables : [], 
                 selectedTables : [],
+                emailMessageRecommendation : null,
                 errorMessage,
                 message,
                 showAnalyzeButton : !viewCreationInProgress
@@ -61,6 +168,7 @@ async function renderPage(resp, selectedTables = null, errorMessage = null) {
         return resp.render('packageExport', { 
             tables : [], 
             selectedTables : [],
+            emailMessageRecommendation : null,
             errorMessage : e.message  || e
         });
     }
