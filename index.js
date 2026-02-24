@@ -30,9 +30,6 @@ const {
 const cluster = require('cluster');
 const MAX_QUERY_PARAMS = 60000;
 const MAX_GZIP_CURSOR_CHUNK_ROWS = 1000;
-const GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS = 10000;
-const GZIP_COMPRESSED_COLUMN = 'htmlbody';
-const ENABLE_GZIP_PROGRESS_LOG = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || true;
 const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 10000;
 
 (async () => {
@@ -259,29 +256,11 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                 const rowsPerInsertChunk = Math.max(1, Math.floor(MAX_QUERY_PARAMS / columnsPerRow));
                 const cursorChunkSize = Math.max(1, Math.min(rowsPerInsertChunk, MAX_GZIP_CURSOR_CHUNK_ROWS));
                 const sourceSelectQuery = `select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} where id between ${currentJob.idFrom} and ${currentJob.idTo} order by id`;
-                const gzipProgress = {
-                    startedAt : Date.now(),
-                    sourceRowsRead : 0,
-                    rowsInserted : 0,
-                    compressedValues : 0,
-                    insertChunks : 0,
-                    cursorChunks : 0
-                };
-
-                if (ENABLE_GZIP_PROGRESS_LOG) {
-                    console.info(
-                        `[GZIP][worker ${process.pid}] job=${currentJob.index} range=${currentJob.idFrom}-${currentJob.idTo} ` +
-                        `cursorChunkSize=${cursorChunkSize} insertChunkSize=${rowsPerInsertChunk}`
-                    );
-                }
 
                 await queryCursor(sourceSelectQuery, [], { chunkSize : cursorChunkSize }, async (sourceRows) => {
                     if (!sourceRows?.length) {
                         return;
                     }
-
-                    gzipProgress.cursorChunks++;
-                    gzipProgress.sourceRowsRead += sourceRows.length;
 
                     for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += rowsPerInsertChunk) {
                         const rowChunk = sourceRows.slice(rowIndex, rowIndex + rowsPerInsertChunk);
@@ -290,11 +269,6 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                                 const value = row[sourceColumnName] !== undefined
                                     ? row[sourceColumnName]
                                     : row[String(sourceColumnName).toLowerCase()];
-                                if (String(sourceColumnName).toLowerCase() === GZIP_COMPRESSED_COLUMN
-                                    && value !== null
-                                    && value !== undefined) {
-                                    gzipProgress.compressedValues++;
-                                }
                                 return maybeCompressFieldValue(sourceTable, sourceColumnName, value);
                             })
                         );
@@ -309,31 +283,8 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                         const insertQuery = `insert into ${hcSchema}.${targetTable.toLowerCase()}(${currentJob.targetColumns}) values ${placeholders} ON CONFLICT (${externalId}) DO NOTHING`;
                         const insertResult = await query(insertQuery, values);
                         insertedCount += Number(insertResult?.rowCount) || 0;
-                        gzipProgress.rowsInserted += rowChunk.length;
-                        gzipProgress.insertChunks++;
-
-                        if (ENABLE_GZIP_PROGRESS_LOG
-                            && gzipProgress.insertChunks % GZIP_PROGRESS_LOG_EVERY_INSERT_CHUNKS === 0) {
-                            const elapsedSeconds = ((Date.now() - gzipProgress.startedAt) / 1000).toFixed(1);
-                            console.info(
-                                `[GZIP][worker ${process.pid}] job=${currentJob.index} progress ` +
-                                `cursorChunks=${gzipProgress.cursorChunks} insertChunks=${gzipProgress.insertChunks} ` +
-                                `sourceRowsRead=${gzipProgress.sourceRowsRead} rowsInserted=${gzipProgress.rowsInserted} ` +
-                                `compressedValues=${gzipProgress.compressedValues} elapsed=${elapsedSeconds}s`
-                            );
-                        }
                     }
                 });
-
-                if (ENABLE_GZIP_PROGRESS_LOG) {
-                    const elapsedSeconds = ((Date.now() - gzipProgress.startedAt) / 1000).toFixed(1);
-                    console.info(
-                        `[GZIP][worker ${process.pid}] job=${currentJob.index} completed ` +
-                        `cursorChunks=${gzipProgress.cursorChunks} insertChunks=${gzipProgress.insertChunks} ` +
-                        `sourceRowsRead=${gzipProgress.sourceRowsRead} rowsInserted=${gzipProgress.rowsInserted} ` +
-                        `compressedValues=${gzipProgress.compressedValues} elapsed=${elapsedSeconds}s`
-                    );
-                }
             }
             msg.insertedCount = insertedCount;
             msg.status = JOB_STATUS.Completed;
