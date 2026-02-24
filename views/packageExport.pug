@@ -177,13 +177,11 @@ html
 					- const showEmailHint = selectedTables && selectedTables.includes('emailmessage')
 					#emailmessage-recommendation.recommendation-box(style= showEmailHint ? '' : 'display: none;')
 						strong Recommended Settings For emailmessage
-						p Max htmlbody length in analysis view: #{emailMessageRecommendation.maxHtmlBodyLength}
+						p Max htmlbody length in analysis view: #{emailMessageRecommendation.maxHtmlBodyLengthKb} KB
 						if emailMessageRecommendation.memoryLimitMb
 							p Detected runtime memory limit: #{emailMessageRecommendation.memoryLimitMb} MB
-						p Current thread count: #{emailMessageRecommendation.configuredThreads}
-						p Safe insert chunk (rows): #{emailMessageRecommendation.recommendedInsertChunk}
-						p Suggested BULK_LIMIT: #{emailMessageRecommendation.recommendedBulkLimit}
-						p Formula bounds: params=#{emailMessageRecommendation.rowsByParams}, memory=#{emailMessageRecommendation.rowsByMemory}
+						p Suggested thread count: #{emailMessageRecommendation.suggestedThreadCount} (current value: #{emailMessageRecommendation.currentThreadCount})
+						p Suggested BULK_LIMIT: #{emailMessageRecommendation.recommendedBulkLimit} (current value: #{emailMessageRecommendation.currentBulkLimit})
 				.permission-set-box
 					input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
 					label(for="includePermissonSet") Include Permission Set 

@@ -20,7 +20,7 @@ const {
     generatePackageXmlFile
 } = require('./../services/salesforce');
 
-const { pcSchema, numberOfThreads } = require('../config/default')
+const { pcSchema, numberOfThreads, bulkLimit } = require('../config/default')
 
 const JSZip = require('jszip');
 
@@ -29,8 +29,10 @@ let viewCreationInProgress = false;
 const EMAILMESSAGE_TABLE = 'emailmessage';
 const HTMLBODY_COLUMN = 'htmlbody';
 const PCMA_VIEW_NAME = 'pcma_tables_info_mv';
-const MAX_QUERY_PARAMS = 60000;
 const MEMORY_UNLIMITED_THRESHOLD_BYTES = 1024 * 1024 * 1024 * 1024;
+const BULK_MEMORY_FRACTION = 0.75;
+const GZIP_MEMORY_OVERHEAD_FACTOR = 1.5;
+const MEMORY_PER_THREAD_MB = 512;
 
 function normalizeSelectedTables(selectedTables) {
     if (Array.isArray(selectedTables)) {
@@ -77,13 +79,16 @@ function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
+function roundToStep(value, step) {
+    return Math.round(value / step) * step;
+}
+
 async function getEmailMessageRecommendation(tables = []) {
     const emailTableInfo = tables.find((table) => String(table?.tablename || '').toLowerCase() === EMAILMESSAGE_TABLE);
     if (!emailTableInfo) {
         return null;
     }
 
-    const sourceColumnsCount = Math.max(1, Number(emailTableInfo.number_of_columns) || 1);
     const maxLengthRes = await query(
         `select column_size::bigint as max_length
          from ${pcSchema}.${PCMA_VIEW_NAME}
@@ -95,33 +100,31 @@ async function getEmailMessageRecommendation(tables = []) {
 
     const memoryLimitBytes = getRuntimeMemoryLimitBytes();
     const memoryLimitMb = memoryLimitBytes ? Math.round(memoryLimitBytes / (1024 * 1024)) : null;
+    const currentThreadCount = Math.max(1, Number(numberOfThreads) || 1);
+    const currentBulkLimit = Math.max(1, Number(bulkLimit) || 1);
+    const suggestedThreadCount = memoryLimitMb
+        ? clamp(Math.floor(memoryLimitMb / MEMORY_PER_THREAD_MB), 1, 8)
+        : currentThreadCount;
 
-    // gzip(base64) payload estimate for htmlbody + small fixed overhead for other columns.
-    const estimatedHtmlPayloadBytes = Math.max(1024, Math.ceil(maxHtmlBodyLength * 0.6));
-    const estimatedRowBytes = estimatedHtmlPayloadBytes + (sourceColumnsCount * 256);
-
-    const configuredThreads = Math.max(1, Number(numberOfThreads) || 1);
-    const rowsByParams = Math.max(1, Math.floor(MAX_QUERY_PARAMS / sourceColumnsCount));
-
-    let rowsByMemory = rowsByParams;
-    if (memoryLimitBytes) {
-        const perWorkerBudgetBytes = Math.max(1, Math.floor((memoryLimitBytes * 0.35) / configuredThreads));
-        rowsByMemory = Math.max(1, Math.floor(perWorkerBudgetBytes / estimatedRowBytes));
-    }
-
-    const recommendedInsertChunk = Math.max(1, Math.min(rowsByParams, rowsByMemory));
-    const recommendedBulkLimit = clamp(recommendedInsertChunk * 8, 1000, 50000);
+    const effectiveMemoryBytes = memoryLimitBytes || (1024 * 1024 * 1024);
+    const perWorkerBudgetBytes = Math.max(1, Math.floor((effectiveMemoryBytes * BULK_MEMORY_FRACTION) / suggestedThreadCount));
+    const estimatedMemoryPerRowBytes = Math.max(1024, Math.floor(maxHtmlBodyLength * GZIP_MEMORY_OVERHEAD_FACTOR));
+    const rawRecommendedBulkLimit = clamp(
+        Math.floor(perWorkerBudgetBytes / estimatedMemoryPerRowBytes),
+        64,
+        5000
+    );
+    const recommendedBulkLimit = clamp(roundToStep(rawRecommendedBulkLimit, 10), 60, 5000);
 
     return {
         tableName : EMAILMESSAGE_TABLE,
         maxHtmlBodyLength,
+        maxHtmlBodyLengthKb : Math.max(1, Math.round(maxHtmlBodyLength / 1024)),
         memoryLimitMb,
-        sourceColumnsCount,
-        rowsByParams,
-        rowsByMemory,
-        recommendedInsertChunk,
         recommendedBulkLimit,
-        configuredThreads
+        currentThreadCount,
+        suggestedThreadCount,
+        currentBulkLimit
     };
 }
 
