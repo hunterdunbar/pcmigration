@@ -41,4 +41,16 @@ describe('services/salesforce.js compression description', () => {
 
         expect(htmlBodyDescription.isCompressed).toBe(0);
     });
+
+    it('should cap LongTextArea length to Salesforce max field size', async () => {
+        mockGetColumns.mockResolvedValue([
+            { columnName: 'htmlbody', dataType: 'text', length: 1048250 }
+        ]);
+
+        const metadata = await getMetadataJson('cache', 'emailmessage');
+        const htmlBodyField = metadata.fields.find(f => f.label === 'htmlbody');
+
+        expect(htmlBodyField.type).toBe('LongTextArea');
+        expect(htmlBodyField.length).toBe(131072);
+    });
 });

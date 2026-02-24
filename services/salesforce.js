@@ -58,6 +58,7 @@ const MAPPED_FIELD_NAME = 'field';
 
 //if data type is int4, float8, int8 the app uses this default length for salesforce text fields
 const DEFAULT_TEXT_LENGTH = 50;
+const SALESFORCE_LONG_TEXTAREA_MAX_FIELD_LENGTH = 131072;
 
 function getFieldMetadata(column) {
 
@@ -80,14 +81,17 @@ function getFieldMetadata(column) {
     }
 
     if (length > 255) {
-        return { length, type : LONG_TEXT_TYPE };
+        return {
+            length: Math.min(length, SALESFORCE_LONG_TEXTAREA_MAX_FIELD_LENGTH),
+            type : LONG_TEXT_TYPE
+        };
     }
 
     return { length : length || DEFAULT_TEXT_LENGTH, type : TEXT_TYPE };
 }
 
 
-const SALESFORCE_LONG_TEXTAREA_MAX_LENGTH =  1638000;
+const SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH = 1638000;
 
 async function getMetadataJson(schemaName, tableName) {
 
@@ -138,8 +142,8 @@ async function getMetadataJson(schemaName, tableName) {
         totalLengthOfTextFields += (f.length || 0);
     })
 
-    if (totalLengthOfTextFields >= SALESFORCE_LONG_TEXTAREA_MAX_LENGTH) {
-        throw new Error(`Total length of LongTextArea fields ${totalLengthOfTextFields} for "${tableName}" exceeds maximum allowed ${SALESFORCE_LONG_TEXTAREA_MAX_LENGTH}`);
+    if (totalLengthOfTextFields >= SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH) {
+        throw new Error(`Total length of LongTextArea fields ${totalLengthOfTextFields} for "${tableName}" exceeds maximum allowed ${SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH}`);
     }
 
     return result;
