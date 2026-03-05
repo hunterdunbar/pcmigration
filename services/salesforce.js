@@ -10,10 +10,13 @@ const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
 const { hashWithBase64 } = require('./../services/utils');
 
 const { getColumns } = require('./db');
-const { isCompressedField } = require('./migrationCompression');
+const {
+    COMPRESSED_COLUMN_NAME,
+    COMPRESSED_FIELD_MAX_PLAIN_LENGTH,
+    shouldCompressFieldByLength
+} = require('./migrationCompression');
 
 const version = 1;
-const COMPRESSED_FLAG_COLUMN = 'htmlbody';
 
 function replaceDoubleUnderscore(name) {
     return name.replace(/(.)__(.)/gi, '$1_$2').replace(/_c$/i, '__c');
@@ -58,7 +61,7 @@ const MAPPED_FIELD_NAME = 'field';
 
 //if data type is int4, float8, int8 the app uses this default length for salesforce text fields
 const DEFAULT_TEXT_LENGTH = 50;
-const SALESFORCE_LONG_TEXTAREA_MAX_FIELD_LENGTH = 131072;
+const SALESFORCE_LONG_TEXTAREA_MAX_FIELD_LENGTH = COMPRESSED_FIELD_MAX_PLAIN_LENGTH;
 
 function getFieldMetadata(column) {
 
@@ -100,6 +103,15 @@ async function getMetadataJson(schemaName, tableName) {
 
     const prefix = getPrefixBasedOnTableName(tableName);
     const newLabel = `${prefix}_${tableName}`;
+    // Keep metadata isCompressed flag aligned with runtime migration compression rule.
+    const htmlBodyColumn = columns.find(
+        (column) => String(column.columnName || '').toLowerCase() === COMPRESSED_COLUMN_NAME
+    );
+    const shouldCompressHtmlBody = shouldCompressFieldByLength(
+        tableName,
+        COMPRESSED_COLUMN_NAME,
+        htmlBodyColumn?.length
+    );
     const result = {
         fullName : getSalesforceCustomObjectName(tableName), //convert sf object name to new object name to prevent issues with length and duplicates
         description : makeDescriptionJson(version, tableName),
@@ -115,8 +127,8 @@ async function getMetadataJson(schemaName, tableName) {
             const { type, length } = getFieldMetadata(column);
             const isSfId = column.columnName === 'sfid';
             const normalizedColumnName = String(column.columnName || '').toLowerCase();
-            const compressedFlag = normalizedColumnName === COMPRESSED_FLAG_COLUMN
-                ? (isCompressedField(tableName, column.columnName) ? 1 : 0)
+            const compressedFlag = normalizedColumnName === COMPRESSED_COLUMN_NAME
+                ? (shouldCompressHtmlBody ? 1 : 0)
                 : undefined;
             const sfField = {
                 fullName : getMappedFieldName(column.columnName, i),

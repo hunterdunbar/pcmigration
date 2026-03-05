@@ -8,7 +8,9 @@ const  {
 
 const { JOB_STATUS } = require('./services/utils');
 const {
+    COMPRESSED_COLUMN_NAME,
     shouldCompressTable,
+    shouldCompressFieldByLength,
     maybeCompressFieldValue
 } = require('./services/migrationCompression');
 
@@ -34,6 +36,33 @@ const MAX_QUERY_PARAMS = 60000;
 const MAX_GZIP_CURSOR_CHUNK_ROWS = 1000;
 // Used by master maybeLogProcessInfo() to throttle processInfo logging frequency.
 const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 10000;
+const PCMA_VIEW_NAME = 'pcma_tables_info_mv';
+
+// Resolves a single boolean flag for the whole migration run:
+// should workers use compressed path for emailmessage.htmlbody or not.
+// Reads max htmlbody length from pcma_tables_info_mv once in master process.
+async function resolveShouldCompressByMaxLength(tableName) {
+    // Compression rule applies only to emailmessage.htmlbody.
+    if (!shouldCompressTable(tableName)) {
+        return false;
+    }
+
+    try {
+        // Read max observed htmlbody length from the prebuilt materialized view once in master.
+        const maxLengthRes = await query(
+            `select column_size::bigint as max_length
+             from ${pcSchema}.${PCMA_VIEW_NAME}
+             where table_name = $1 and column_name = $2
+             limit 1`,
+            [String(tableName || '').toLowerCase(), COMPRESSED_COLUMN_NAME]
+        );
+        const maxLength = Number(maxLengthRes?.rows?.[0]?.max_length);
+        return shouldCompressFieldByLength(tableName, COMPRESSED_COLUMN_NAME, maxLength);
+    } catch (e) {
+        // If materialized-view data is unavailable, keep compression enabled as a safe fallback.
+        return true;
+    }
+}
 
 (async () => {
 
@@ -61,7 +90,8 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
         const targetColumnNames = tableMetada?.rows.map((r, i) => getMappedFieldName(r.columnName, i)) || [];
         const sourceColumns = sourceColumnNames.join(',');
         const targetColumns = targetColumnNames.join(',');
-        const shouldCompress = shouldCompressTable(sourceTable);
+        // Compute once in master and pass the boolean to every worker job.
+        const shouldCompress = await resolveShouldCompressByMaxLength(sourceTable);
         const bulkSize = Number(bulkLimit);
 
         if (!Number.isFinite(bulkSize) || bulkSize <= 0) {

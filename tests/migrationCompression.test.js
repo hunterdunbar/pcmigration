@@ -1,8 +1,10 @@
 const zlib = require('zlib');
 
 const {
+    COMPRESSED_FIELD_MAX_PLAIN_LENGTH,
     shouldCompressTable,
     isCompressedField,
+    shouldCompressFieldByLength,
     maybeCompressFieldValue
 } = require('../services/migrationCompression');
 
@@ -17,6 +19,14 @@ describe('services/migrationCompression.js', () => {
         expect(isCompressedField('emailmessage', 'htmlbody')).toBe(true);
         expect(isCompressedField('emailmessage', 'subject')).toBe(false);
         expect(isCompressedField('case', 'htmlbody')).toBe(false);
+    });
+
+    it('should enable compression only when htmlbody max length exceeds Salesforce limit', () => {
+        expect(shouldCompressFieldByLength('emailmessage', 'htmlbody', COMPRESSED_FIELD_MAX_PLAIN_LENGTH - 1)).toBe(false);
+        expect(shouldCompressFieldByLength('emailmessage', 'htmlbody', COMPRESSED_FIELD_MAX_PLAIN_LENGTH)).toBe(false);
+        expect(shouldCompressFieldByLength('emailmessage', 'htmlbody', COMPRESSED_FIELD_MAX_PLAIN_LENGTH + 1)).toBe(true);
+        expect(shouldCompressFieldByLength('emailmessage', 'subject', COMPRESSED_FIELD_MAX_PLAIN_LENGTH + 1)).toBe(false);
+        expect(shouldCompressFieldByLength('emailmessage', 'htmlbody', null)).toBe(true);
     });
 
     it('should gzip only emailmessage.htmlbody values', () => {
