@@ -16,6 +16,8 @@ function isCompressedField(tableName, columnName) {
         && normalizeName(columnName) === COMPRESSED_COLUMN_NAME;
 }
 
+// Used by the migration worker (index.js, compressed path) before INSERT:
+// convert emailmessage.htmlbody values to gzip+base64 so the payload fits Salesforce LongTextArea limits.
 function maybeCompressFieldValue(tableName, columnName, value) {
     if (!isCompressedField(tableName, columnName)) {
         return value;

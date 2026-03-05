@@ -28,8 +28,11 @@ const {
 } = require('./config/default')
 
 const cluster = require('cluster');
+// Used in worker compressed path (rowsPerInsertChunk) to stay under Postgres bind parameter limit.
 const MAX_QUERY_PARAMS = 60000;
+// Used in worker compressed path (cursorChunkSize) to cap rows fetched per cursor read.
 const MAX_GZIP_CURSOR_CHUNK_ROWS = 1000;
+// Used by master maybeLogProcessInfo() to throttle processInfo logging frequency.
 const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PREFIX || 10000;
 
 (async () => {
@@ -248,12 +251,15 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                 const queryResult = await query(queryString);
                 insertedCount = Number(queryResult?.rowCount) || 0;
             } else {
+                // Compressed migration path: stream rows, compress required fields, insert in safe-sized batches.
                 const columnsPerRow = currentJob.targetColumnNames.length;
                 if (!columnsPerRow) {
                     throw new Error('No target columns found for compressed migration path');
                 }
 
+                // Split inserts to keep total bind params under MAX_QUERY_PARAMS.
                 const rowsPerInsertChunk = Math.max(1, Math.floor(MAX_QUERY_PARAMS / columnsPerRow));
+                // Cursor fetch size is additionally capped to avoid large in-memory gzip batches.
                 const cursorChunkSize = Math.max(1, Math.min(rowsPerInsertChunk, MAX_GZIP_CURSOR_CHUNK_ROWS));
                 const sourceSelectQuery = `select ${currentJob.sourceColumns} from ${pcSchema}.${sourceTable} where id between ${currentJob.idFrom} and ${currentJob.idTo} order by id`;
 
@@ -264,6 +270,7 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
 
                     for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += rowsPerInsertChunk) {
                         const rowChunk = sourceRows.slice(rowIndex, rowIndex + rowsPerInsertChunk);
+                        // Preserve source column order and apply gzip+base64 only for configured compressed fields.
                         const values = rowChunk.flatMap(row =>
                             currentJob.sourceColumnNames.map(sourceColumnName => {
                                 const value = row[sourceColumnName] !== undefined
@@ -273,6 +280,7 @@ const PROCESS_INFO_LOG_MIN_INTERVAL_MS = process.env.MIGRATED_STANDRD_OBJECT_PRE
                             })
                         );
 
+                        // Build positional placeholders for multi-row VALUES (...),(...).
                         const placeholders = rowChunk.map((_, chunkRowIndex) => {
                             const rowPlaceholders = currentJob.targetColumnNames.map((__, colIndex) =>
                                 `$${chunkRowIndex * columnsPerRow + colIndex + 1}`
