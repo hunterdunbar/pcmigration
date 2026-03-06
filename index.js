@@ -9,8 +9,8 @@ const  {
 const { JOB_STATUS } = require('./services/utils');
 const {
     COMPRESSED_COLUMN_NAME,
+    COMPRESSED_FIELD_MAX_PLAIN_LENGTH,
     shouldCompressTable,
-    shouldCompressFieldByLength,
     maybeCompressFieldValue
 } = require('./services/migrationCompression');
 
@@ -56,8 +56,8 @@ async function resolveShouldCompressByMaxLength(tableName) {
              limit 1`,
             [String(tableName || '').toLowerCase(), COMPRESSED_COLUMN_NAME]
         );
-        const maxLength = Number(maxLengthRes?.rows?.[0]?.max_length);
-        return shouldCompressFieldByLength(tableName, COMPRESSED_COLUMN_NAME, maxLength);
+        const maxLength = maxLengthRes ? Number(maxLengthRes.rows?.[0]?.max_length) : null;
+        return maxLength && maxLength > COMPRESSED_FIELD_MAX_PLAIN_LENGTH;
     } catch (e) {
         // If materialized-view data is unavailable, keep compression enabled as a safe fallback.
         return true;
