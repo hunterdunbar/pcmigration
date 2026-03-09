@@ -132,3 +132,6 @@ package-lock.json
 test.js
 .vscode/launch.json
 yarn.lock
+
+# Idea
+.idea/
