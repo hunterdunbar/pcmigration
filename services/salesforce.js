@@ -10,11 +10,6 @@ const xmlConverterOptions = {compact: true, ignoreComment: true, spaces: 4};
 const { hashWithBase64 } = require('./../services/utils');
 
 const { getColumns } = require('./db');
-const {
-    COMPRESSED_COLUMN_NAME,
-    COMPRESSED_FIELD_MAX_PLAIN_LENGTH,
-    shouldCompressFieldByLength
-} = require('./migrationCompression');
 
 const version = 1;
 
@@ -61,7 +56,6 @@ const MAPPED_FIELD_NAME = 'field';
 
 //if data type is int4, float8, int8 the app uses this default length for salesforce text fields
 const DEFAULT_TEXT_LENGTH = 50;
-const SALESFORCE_LONG_TEXTAREA_MAX_FIELD_LENGTH = COMPRESSED_FIELD_MAX_PLAIN_LENGTH;
 
 function getFieldMetadata(column) {
 
@@ -84,17 +78,14 @@ function getFieldMetadata(column) {
     }
 
     if (length > 255) {
-        return {
-            length: Math.min(length, SALESFORCE_LONG_TEXTAREA_MAX_FIELD_LENGTH),
-            type : LONG_TEXT_TYPE
-        };
+        return { length, type : LONG_TEXT_TYPE };
     }
 
     return { length : length || DEFAULT_TEXT_LENGTH, type : TEXT_TYPE };
 }
 
 
-const SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH = 1638000;
+const SALESFORCE_LONG_TEXTAREA_MAX_LENGTH =  1638000;
 
 async function getMetadataJson(schemaName, tableName) {
 
@@ -103,15 +94,6 @@ async function getMetadataJson(schemaName, tableName) {
 
     const prefix = getPrefixBasedOnTableName(tableName);
     const newLabel = `${prefix}_${tableName}`;
-    // Keep metadata isCompressed flag aligned with runtime migration compression rule.
-    const htmlBodyColumn = columns.find(
-        (column) => String(column.columnName || '').toLowerCase() === COMPRESSED_COLUMN_NAME
-    );
-    const shouldCompressHtmlBody = shouldCompressFieldByLength(
-        tableName,
-        COMPRESSED_COLUMN_NAME,
-        htmlBodyColumn?.length
-    );
     const result = {
         fullName : getSalesforceCustomObjectName(tableName), //convert sf object name to new object name to prevent issues with length and duplicates
         description : makeDescriptionJson(version, tableName),
@@ -126,13 +108,9 @@ async function getMetadataJson(schemaName, tableName) {
         fields : columns.map((column, i) => {
             const { type, length } = getFieldMetadata(column);
             const isSfId = column.columnName === 'sfid';
-            const normalizedColumnName = String(column.columnName || '').toLowerCase();
-            const compressedFlag = normalizedColumnName === COMPRESSED_COLUMN_NAME
-                ? (shouldCompressHtmlBody ? 1 : 0)
-                : undefined;
             const sfField = {
                 fullName : getMappedFieldName(column.columnName, i),
-                description : makeDescriptionJson(version, column.columnName, compressedFlag),
+                description : makeDescriptionJson(version, column.columnName),
                 label : column.columnName.slice(0, 40), //max label length is 40
                 type,
                 length,
@@ -154,8 +132,8 @@ async function getMetadataJson(schemaName, tableName) {
         totalLengthOfTextFields += (f.length || 0);
     })
 
-    if (totalLengthOfTextFields >= SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH) {
-        throw new Error(`Total length of LongTextArea fields ${totalLengthOfTextFields} for "${tableName}" exceeds maximum allowed ${SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH}`);
+    if (totalLengthOfTextFields >= SALESFORCE_LONG_TEXTAREA_MAX_LENGTH) {
+        throw new Error(`Total length of LongTextArea fields ${totalLengthOfTextFields} for "${tableName}" exceeds maximum allowed ${SALESFORCE_LONG_TEXTAREA_MAX_LENGTH}`);
     }
 
     return result;
@@ -196,17 +174,11 @@ function getMappedFieldName(name, index) {
     return `${MAPPED_FIELD_NAME}_${index}__c`; //mapped field names to avoid issues with length or duplicates
 }
 
-function makeDescriptionJson(version, apiName, isCompressed) {
-    const description = {
+function makeDescriptionJson(version, apiName) {
+    return JSON.stringify({
         version,
         apiName : apiName === 'sfid' ? 'Id' : apiName
-    };
-
-    if (isCompressed === 0 || isCompressed === 1) {
-        description.isCompressed = isCompressed;
-    }
-
-    return JSON.stringify(description);
+    });
 }
 
 function generateCustomObjectFile(metadataJson) {

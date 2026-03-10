@@ -23,7 +23,7 @@ const pool = new Pool({
 
 async function query(sql, params) {
     return pool.query(sql, params);
-
+    
 }
 
 async function getSchemas() {
@@ -38,7 +38,7 @@ async function getTablesInSchemas(schemas = []) {
     }
     const result = await query(`select schemaname, tablename, pg_size_pretty( pg_total_relation_size(schemaname || '.' || tablename)) table_size, \
         (select COUNT(*) from information_schema.columns where table_name = tablename and table_schema = schemaname) number_of_columns from pg_catalog.pg_tables \
-        where not(starts_with(tablename, '_')) and tableowner = $1 and schemaname in (${schemas.map((v, i) => '$' + (2 + i)).join(',')}) order by tablename`,
+        where not(starts_with(tablename, '_')) and tableowner = $1 and schemaname in (${schemas.map((v, i) => '$' + (2 + i)).join(',')}) order by tablename`, 
         [ dbConfig.user, ...schemas ]);
 
     return result?.rows?.reduce((groupedData, row) => {
@@ -68,12 +68,12 @@ async function getTablesInfo(tableNamesWithSchema = []) {
             const tableMetada = await getTableMetadata(schemaName, tableName);
             const countOfRows = await query(`select count(*) from ${tableNameWithSchema}`);
             const tableSize = await query(`SELECT pg_total_relation_size('${tableNameWithSchema}') table_size`);
-            return {
-                [tableNameWithSchema] : {
-                    countOfRows : countOfRows?.rows?.[0]?.count,
+            return { 
+                [tableNameWithSchema] : { 
+                    countOfRows : countOfRows?.rows?.[0]?.count, 
                     tableSize : tableSize?.rows?.[0]?.table_size,
                     tableMetada : tableMetada?.rows
-                }
+                } 
             }
         })
     );
@@ -83,33 +83,21 @@ async function getTablesInfo(tableNamesWithSchema = []) {
             return groupedData
         }, {})
     }
-
+    
     return []
 }
 
 async function queryCursor(sql, params, config = {}, callback) {
     const client = await pool.connect();
     const cursor = client.query(new Cursor(sql, params));
-
+    
     try {
-        const configuredChunkSize = Number(config.chunkSize);
-        const fallbackChunkSize = Number.isFinite(configuredChunkSize) && configuredChunkSize > 0
-            ? Math.floor(configuredChunkSize)
-            : 10000;
-        const getChunkSize = typeof config.getChunkSize === 'function'
-            ? config.getChunkSize
-            : null;
-
         let rows = []
         do {
-            const dynamicChunkSize = getChunkSize ? Number(getChunkSize()) : NaN;
-            const chunkSize = Number.isFinite(dynamicChunkSize) && dynamicChunkSize > 0
-                ? Math.floor(dynamicChunkSize)
-                : fallbackChunkSize;
-            rows = await cursor.read(chunkSize);
+            rows = await cursor.read(config.chunkSize || 10000);
             await callback(rows)
-        } while (rows?.length !== 0)
-
+        } while (rows?.length !== 0) 
+                
     } catch (e) {
         console.error('[ERROR]: queryCursor: ', e);
         await cursor.close()
@@ -153,7 +141,7 @@ class QueryStream extends Readable {
 }
 
 class HerokuSchemaWriter extends Writable {
-
+    
     dbClient;
     tableName;
 
@@ -177,7 +165,7 @@ class HerokuSchemaWriter extends Writable {
                     done()
                 }
             });
-
+            
         }
     }
 
@@ -212,8 +200,8 @@ async function isTableExisting(tableName, schemaName = 'public') {
 async function getColumns(schemaName, tableName) {
     const tableMetada = await getTableMetadata(schemaName, tableName);
     if (!tableMetada) { throw new Error('There is an issue to get information about the table: ' + tableName + ' in schema: ' + schemaName) }
-
-
+    
+    
     const columns = tableMetada.rows?.map(column => {
         return {
             columnName : column.columnName,
@@ -224,14 +212,14 @@ async function getColumns(schemaName, tableName) {
 
 
     //some of text columns don't have length, to create salesforce object we have to know max size of these
-    const columnsWithoutLength = columns.filter(col => (col.dataType === 'varchar' || col.dataType === 'text')
+    const columnsWithoutLength = columns.filter(col => (col.dataType === 'varchar' || col.dataType === 'text') 
         && !col.length && !col.columnName.startsWith('_') && col.columnName !== 'sfid').map(col => col.columnName);
-
-
+    
+    
     if (columnsWithoutLength?.length) {
         const queryToGetMaxLength = `select column_name, data_type, column_size from ${schemaName}.${PCMA_VIEW_NAME} where table_name = '${tableName}' and 
             column_name in (${columnsWithoutLength.map(col => `'${col}'`).join(',')})`;
-
+        
         console.debug('QUERY for Max Lenth: ' + queryToGetMaxLength);
         const result = await query(queryToGetMaxLength);
         if (result.rows?.length) {

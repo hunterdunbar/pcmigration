@@ -113,26 +113,6 @@ html
 				gap: 10px;
 				margin-bottom: 20px;
 			}
-
-			.recommendation-box {
-				margin: 16px auto 0;
-				width: 60%;
-				padding: 12px 14px;
-				border: 1px solid #b3d7ff;
-				background-color: #eef6ff;
-				color: #113a67;
-				text-align: left;
-				line-height: 1.4;
-			}
-
-			.recommendation-box p {
-				margin: 4px 0;
-			}
-
-			.recommendation-box strong {
-				display: block;
-				margin-bottom: 6px;
-			}
 	body
 		if message
 			.message= message
@@ -173,15 +153,6 @@ html
 								td #{val.tablename}
 								td #{val.number_of_columns}
 								td #{val.table_size}
-				if emailMessageRecommendation
-					- const showEmailHint = selectedTables && selectedTables.includes('emailmessage')
-					#emailmessage-recommendation.recommendation-box(style= showEmailHint ? '' : 'display: none;')
-						strong Maximum Settings For emailmessage
-						p Max htmlbody length in analysis view: #{emailMessageRecommendation.maxHtmlBodyLengthKb} KB
-						if emailMessageRecommendation.memoryLimitMb
-							p Detected runtime memory limit: #{emailMessageRecommendation.memoryLimitMb} MB
-						p Maximum thread count: #{emailMessageRecommendation.maximumThreadCount} (current value: #{emailMessageRecommendation.currentThreadCount})
-						p Maximum BULK_LIMIT: #{emailMessageRecommendation.maximumBulkLimit} (current value: #{emailMessageRecommendation.currentBulkLimit})
 				.permission-set-box
 					input(type="checkbox", id="includePermissonSet" name="includePermissonSet" checked)
 					label(for="includePermissonSet") Include Permission Set 
@@ -192,8 +163,6 @@ html
 			document.addEventListener('DOMContentLoaded', function() {
 				const selectAllCheckbox = document.getElementById('selectAll');
 				const tableCheckboxes = document.querySelectorAll('.table-checkbox');
-				const emailMessageCheckbox = document.querySelector('.table-checkbox[value="emailmessage"]');
-				const emailMessageRecommendation = document.getElementById('emailmessage-recommendation');
 
 				// Handle select all checkbox change
 				selectAllCheckbox.addEventListener('change', function() {
@@ -224,10 +193,6 @@ html
 					} else {
 						selectAllCheckbox.checked = false;
 						selectAllCheckbox.indeterminate = true;
-					}
-
-					if (emailMessageRecommendation && emailMessageCheckbox) {
-						emailMessageRecommendation.style.display = emailMessageCheckbox.checked ? '' : 'none';
 					}
 				}
 
