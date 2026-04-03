@@ -11,6 +11,7 @@ const {
     COMPRESSED_COLUMN_NAME,
     COMPRESSED_FIELD_MAX_PLAIN_LENGTH,
     shouldCompressTable,
+    isForceMessageCompressionEnabled,
     maybeCompressFieldValue
 } = require('./services/migrationCompression');
 
@@ -45,6 +46,10 @@ async function resolveShouldCompressByMaxLength(tableName) {
     // Compression rule applies only to emailmessage.htmlbody.
     if (!shouldCompressTable(tableName)) {
         return false;
+    }
+
+    if (isForceMessageCompressionEnabled()) {
+        return true;
     }
 
     try {
