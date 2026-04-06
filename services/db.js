@@ -92,9 +92,21 @@ async function queryCursor(sql, params, config = {}, callback) {
     const cursor = client.query(new Cursor(sql, params));
     
     try {
+        const configuredChunkSize = Number(config.chunkSize);
+        const fallbackChunkSize = Number.isFinite(configuredChunkSize) && configuredChunkSize > 0
+            ? Math.floor(configuredChunkSize)
+            : 10000;
+        const getChunkSize = typeof config.getChunkSize === 'function'
+            ? config.getChunkSize
+            : null;
+
         let rows = []
         do {
-            rows = await cursor.read(config.chunkSize || 10000);
+            const dynamicChunkSize = getChunkSize ? Number(getChunkSize()) : NaN;
+            const chunkSize = Number.isFinite(dynamicChunkSize) && dynamicChunkSize > 0
+                ? Math.floor(dynamicChunkSize)
+                : fallbackChunkSize;
+            rows = await cursor.read(chunkSize);
             await callback(rows)
         } while (rows?.length !== 0) 
                 
