@@ -151,7 +151,7 @@ async function getMetadataJson(schemaName, tableName) {
     //Salesforce has limit of 1,638,000 chars for all text fields in one object
     let totalLengthOfTextFields = 0;
     result.fields.filter(f => f.type === LONG_TEXT_TYPE).forEach(f => {
-        totalLengthOfTextFields += (f.length || 0);
+        totalLengthOfTextFields += Number(f.length) || 0;
     })
 
     if (totalLengthOfTextFields >= SALESFORCE_LONG_TEXTAREA_TOTAL_MAX_LENGTH) {

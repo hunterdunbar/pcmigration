@@ -238,7 +238,7 @@ async function getColumns(schemaName, tableName) {
             result.rows.forEach(row => {
                 const column = columns.find(col => col.columnName === row.column_name);
                 if (column && row.column_size) {
-                    column.length = row.column_size;
+                    column.length = Number(row.column_size);
                 }
             })
         }
