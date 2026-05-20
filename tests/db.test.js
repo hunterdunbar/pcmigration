@@ -113,6 +113,35 @@ describe('services/db.js - Commit 6338299: Column Length Lookup Fix', () => {
             expect(result[0]).toEqual({ columnName: 'empty_field', dataType: 'text', length: null });
         });
 
+        it('should coerce bigint column_size string from materialized view to Number', async () => {
+            // pg returns Postgres bigint as string. Verify getColumns coerces to Number
+            // so downstream arithmetic does not string-concat.
+            mockPool.query
+                .mockResolvedValueOnce({
+                    rows: [
+                        { columnName: 'htmlbody', dataType: 'text', length: null },
+                        { columnName: 'body',     dataType: 'text', length: null }
+                    ]
+                })
+                .mockResolvedValueOnce({
+                    rows: [
+                        { column_name: 'htmlbody', data_type: 'text', column_size: '500000' },
+                        { column_name: 'body',     data_type: 'text', column_size: '250000' }
+                    ]
+                });
+
+            const result = await db.getColumns('test_schema', 'emailmessage');
+
+            expect(typeof result[0].length).toBe('number');
+            expect(result[0].length).toBe(500000);
+            expect(typeof result[1].length).toBe('number');
+            expect(result[1].length).toBe(250000);
+
+            // Sanity check: arithmetic must add, not concat.
+            const sum = (result[0].length || 0) + (result[1].length || 0);
+            expect(sum).toBe(750000);
+        });
+
         it('should only update columns that exist in both arrays', async () => {
             mockPool.query
                 .mockResolvedValueOnce({

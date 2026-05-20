@@ -53,6 +53,21 @@ describe('services/salesforce.js compression description', () => {
         expect(htmlBodyDescription.isCompressed).toBe(0);
     });
 
+    it('should sum LongTextArea lengths numerically when length is a string (bigint from pg)', async () => {
+        // Reproduces the bug where pg bigint returns string and "+= f.length" string-concats,
+        // producing a huge bogus total like "0131072131072131072..." that triggered a false
+        // "exceeds maximum allowed 1638000" error.
+        mockGetColumns.mockResolvedValue([
+            { columnName: 'htmlbody', dataType: 'text', length: '131072' },
+            { columnName: 'body',     dataType: 'text', length: '131072' },
+            { columnName: 'subject',  dataType: 'text', length: '131072' }
+        ]);
+
+        // Should not throw; numeric sum is 393216 < 1638000.
+        const metadata = await getMetadataJson('cache', 'emailmessage');
+        expect(metadata.fields).toHaveLength(3);
+    });
+
     it('should cap LongTextArea length to Salesforce max field size', async () => {
         mockGetColumns.mockResolvedValue([
             { columnName: 'htmlbody', dataType: 'text', length: 1048250 }
